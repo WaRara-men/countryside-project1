@@ -103,7 +103,11 @@ export default function FamilyDashboard() {
         <div className="flex justify-between items-start mb-4">
           <div>
             <h1 className="text-xl font-bold text-gray-800">父さんの安否</h1>
-            <p className="text-sm text-gray-500">群馬県安中市</p>
+            <p className="text-xs text-gray-500 font-mono mt-1">
+              {latest?.path?.length > 0 
+                ? `最新位置: ${latest.path[latest.path.length-1].lat.toFixed(4)}, ${latest.path[latest.path.length-1].lng.toFixed(4)}`
+                : "位置情報を取得中..."}
+            </p>
           </div>
           <div className={`${latest?.end_time ? 'bg-samurai-green/10 text-samurai-green' : 'bg-samurai-gold/10 text-samurai-gold'} px-4 py-2 rounded-full text-sm font-black animate-pulse`}>
             {latest?.end_time ? '帰宅済み' : '修行中'}
