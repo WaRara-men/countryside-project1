@@ -89,8 +89,8 @@ export default function MapView({ path, alerts = [] }: MapViewProps) {
             strokeColor: "#EF4444",
             strokeOpacity: 0.9,
             strokeWeight: 8,
-            lineJoin: "round",
-            lineCap: "round"
+            strokeLineJoin: "round",
+            strokeLineCap: "round"
           }}
         />
       )}
