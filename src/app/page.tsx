@@ -4,11 +4,13 @@ import { useState } from "react";
 import { ShieldAlert, Footprints, Home, Mic, Award } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTracking } from "@/hooks/useTracking";
-import { supabase } from "@/lib/supabase"; // 追加
+import { supabase } from "@/lib/supabase";
+import { useVoiceAnalysis } from "@/hooks/useVoiceAnalysis"; // 追加
 
 export default function ElderlyPage() {
   const [status, setStatus] = useState<"resting" | "walking" | "recording" | "praised">("resting");
   const { path, startTracking, stopTracking } = useTracking();
+  const { volume, startRecording, stopRecording } = useVoiceAnalysis(); // 追加
 
   const handleStart = () => {
     setStatus("walking");
@@ -18,30 +20,35 @@ export default function ElderlyPage() {
   const handleEnd = async () => {
     const finalPath = stopTracking();
     setStatus("recording");
+    
+    // 実際にマイクを起動して録音・解析開始
+    await startRecording();
 
-    // 1. 疑似的な元気度スコアを算出（本来は音声解析結果）
-    const score = Math.floor(Math.random() * 21) + 75; // 75-95点
+    // 5秒後に自動で録音を終了してデータを保存
+    setTimeout(async () => {
+      const peakVolume = stopRecording();
+      
+      // 最大音量に基づいた「元気度スコア」を算出
+      // （小さな声なら低く、ハリのある声なら高くなるように調整）
+      const score = Math.min(100, Math.max(60, Math.floor(peakVolume * 1.5)));
 
-    // 2. Supabaseへデータを保存
-    try {
-      const { error: insertError } = await supabase.from("activities").insert([
-        {
-          path: finalPath,
-          voice_score: score,
-          distance: finalPath.length * 0.01,
-          is_warning: score < 70,
-        },
-      ]);
-      if (insertError) throw insertError;
-      console.log("修行の成果を家族に届けました！");
-    } catch (err) {
-      console.error("保存失敗:", err);
-    }
+      // Supabaseへデータを保存
+      try {
+        const { error: insertError } = await supabase.from("activities").insert([
+          {
+            path: finalPath,
+            voice_score: score,
+            distance: finalPath.length * 0.01,
+            is_warning: score < 70,
+          },
+        ]);
+        if (insertError) throw insertError;
+      } catch (err) {
+        console.error("保存失敗:", err);
+      }
 
-    // 録音後の「称賛」画面へ
-    setTimeout(() => {
       setStatus("praised");
-    }, 4000);
+    }, 5000);
   };
 
   return (
@@ -80,8 +87,20 @@ export default function ElderlyPage() {
           )}
 
           {status === "recording" && (
-            <motion.div key="recording" className="text-center">
-              <Mic className="w-40 h-40 text-samurai-red animate-pulse mx-auto" />
+            <motion.div key="recording" className="text-center relative">
+              {/* 声の大きさに反応する波形（同心円） */}
+              <motion.div 
+                className="absolute inset-0 bg-samurai-red/30 rounded-full"
+                animate={{ scale: 1 + (volume / 100) }}
+                transition={{ type: "spring", damping: 10 }}
+              />
+              <motion.div 
+                className="absolute inset-0 bg-samurai-red/20 rounded-full"
+                animate={{ scale: 1 + (volume / 50) }}
+                transition={{ type: "spring", damping: 10 }}
+              />
+              
+              <Mic className="w-40 h-40 text-samurai-red relative z-10" />
               <p className="text-elderly-lg font-bold mt-4">「ただいま」と<br />お話しください</p>
             </motion.div>
           )}
