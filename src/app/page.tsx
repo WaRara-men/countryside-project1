@@ -13,6 +13,7 @@ import { calculateTotalPathDistance, calculateNakasendoProgress } from "@/lib/na
 
 export default function ElderlyPage() {
   const [status, setStatus] = useState<"resting" | "walking" | "recording" | "praised">("resting");
+  const [isStarting, setIsStarting] = useState(false); // 出陣処理中フラグ
   const [currentActivityId, setCurrentActivityId] = useState<string | null>(null);
   const [messages, setMessages] = useState<SamuraiMessage[]>([]);
   const [activeSamurai, setActiveSamurai] = useState(0);
@@ -80,6 +81,9 @@ export default function ElderlyPage() {
   }, [path, status, currentActivityId]);
 
   const handleStart = async () => {
+    if (isStarting) return; // 既に処理中なら何もしない
+    setIsStarting(true);
+    
     try {
       const params = new URLSearchParams(window.location.search);
       const username = params.get("user") || "不明な侍";
@@ -106,6 +110,8 @@ export default function ElderlyPage() {
       }
     } catch (err: any) {
       alert(`出陣の準備に失敗しました。\n理由: ${err.message}`);
+    } finally {
+      setIsStarting(false);
     }
   };
 

@@ -23,10 +23,20 @@ export default function FamilyDashboard() {
       .from("activities")
       .select("*")
       .order("start_time", { ascending: false })
-      .limit(7);
+      .limit(20); // 多めに取得して後でフィルタリング
 
     if (data) {
-      setActivities(data as ActivityData[]);
+      const now = new Date();
+      const filtered = data.filter((act: ActivityData) => {
+        // 完了しているものは表示
+        if (act.end_time) return true;
+        
+        // 未完了の場合、開始から10分以内なら「修行中」として表示
+        const startTime = new Date(act.start_time);
+        const diffMinutes = (now.getTime() - startTime.getTime()) / (1000 * 60);
+        return diffMinutes < 10;
+      });
+      setActivities(filtered.slice(0, 7)); // 有効な最新7件を表示
     }
     setLoading(false);
   };
