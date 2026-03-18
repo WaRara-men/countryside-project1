@@ -9,19 +9,25 @@ import { useVoiceAnalysis } from "@/hooks/useVoiceAnalysis";
 import { getLatestMessages, SamuraiMessage, markAsRead } from "@/lib/messages";
 import { getActiveSamuraiCount } from "@/lib/activities";
 import { syncPathToSupabase, setupSyncListener } from "@/lib/offlineSync";
+import { calculateTotalPathDistance, calculateNakasendoProgress } from "@/lib/nakasendo";
 
 export default function ElderlyPage() {
   const [status, setStatus] = useState<"resting" | "walking" | "recording" | "praised">("resting");
   const [currentActivityId, setCurrentActivityId] = useState<string | null>(null);
   const [messages, setMessages] = useState<SamuraiMessage[]>([]);
   const [activeSamurai, setActiveSamurai] = useState(0);
-  const [goalKm, setGoalKm] = useState(3);
   const [isOnline, setIsOnline] = useState(true);
   
   const { path, startTracking, stopTracking } = useTracking();
   const { volume, startRecording, stopRecording } = useVoiceAnalysis();
 
-  const currentDistance = useMemo(() => path.length * 0.01, [path]);
+  // 正確な総移動距離(km)を計算
+  const currentDistance = useMemo(() => calculateTotalPathDistance(path), [path]);
+  
+  // 中山道の宿場町進捗
+  const progress = useMemo(() => calculateNakasendoProgress(currentDistance), [currentDistance]);
+  
+  // 歩数は引き続き距離ベース（1km = 1400歩）で表示
   const currentSteps = useMemo(() => Math.floor(currentDistance * 1400), [currentDistance]);
 
   useEffect(() => {
@@ -119,7 +125,7 @@ export default function ElderlyPage() {
             end_time: new Date().toISOString(),
             path: finalPath,
             voice_score: score,
-            distance: finalPath.length * 0.01,
+            distance: calculateTotalPathDistance(finalPath), // 正確な距離を保存
             is_warning: score < 70,
           })
           .eq("id", currentActivityId);
@@ -191,8 +197,23 @@ export default function ElderlyPage() {
                     </p>
                   </div>
                 </div>
-                <div className="w-full bg-gray-800 h-4 rounded-full mt-6 overflow-hidden">
-                  <motion.div className="h-full bg-samurai-green" animate={{ width: `${Math.min(100, (currentDistance / goalKm) * 100)}%` }} />
+
+                <div className="mt-8 pt-6 border-t border-white/10 w-full">
+                  <div className="flex justify-between items-end mb-2">
+                    <p className="text-elderly-base font-bold text-samurai-gold">
+                      次の目標：{progress.nextGoalName}
+                    </p>
+                    <p className="text-elderly-lg font-black">
+                      あと {progress.distanceToNext.toFixed(2)} <span className="text-sm">km</span>
+                    </p>
+                  </div>
+                  <div className="w-full bg-gray-800 h-6 rounded-full overflow-hidden border-2 border-white/5">
+                    <motion.div 
+                      className="h-full bg-samurai-gold shadow-[0_0_15px_rgba(255,215,0,0.5)]" 
+                      initial={{ width: 0 }}
+                      animate={{ width: `${progress.progressPercent}%` }} 
+                    />
+                  </div>
                 </div>
               </div>
             </motion.div>
