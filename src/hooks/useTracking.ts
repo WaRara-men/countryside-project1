@@ -42,7 +42,7 @@ export function useTracking() {
         setPath((prev) => {
           // 前回と同じ地点なら保存しない（バッテリー節約）
           const lastLocation = prev[prev.length - 1];
-          if (lastLocation && lastLocation.lat === lat && lastLocation.lng === lng) return prev;
+          if (lastLocation && lastLocation.lat === newLocation.lat && lastLocation.lng === newLocation.lng) return prev;
 
           const updatedPath = [...prev, newLocation];
           localStorage.setItem("samurai_pending_path", JSON.stringify(updatedPath));
