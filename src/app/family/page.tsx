@@ -123,7 +123,7 @@ export default function FamilyDashboard() {
             <p className="text-sm text-gray-600 font-bold mt-1">
               {address}
             </p>
-            {latest?.path?.length > 0 && (
+            {latest && latest.path && latest.path.length > 0 && (
               <p className="text-[10px] text-samurai-gold font-black uppercase tracking-widest mt-0.5">
                 領内: {getNearestGoalName(latest.path[latest.path.length-1].lat, latest.path[latest.path.length-1].lng)}
               </p>
