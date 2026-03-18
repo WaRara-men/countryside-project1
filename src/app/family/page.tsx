@@ -1,34 +1,31 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Heart, Activity, TrendingUp, HeartPulse, MapPin, Calendar } from "lucide-react";
+import { Heart, Activity, HeartPulse, MapPin, Calendar } from "lucide-react";
 import MapView from "@/components/MapView";
 import { supabase } from "@/lib/supabase";
-import { Location } from "@/lib/types";
 
 export default function FamilyDashboard() {
   const [latestActivity, setLatestActivity] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  // 初回データ取得
-  const fetchLatestActivity = async () => {
-    const { data, error } = await supabase
-      .from("activities")
-      .select("*")
-      .order("start_time", { ascending: false })
-      .limit(1)
-      .single();
-
-    if (data) {
-      setLatestActivity(data);
-    }
-    setLoading(false);
-  };
-
   useEffect(() => {
+    const fetchLatestActivity = async () => {
+      const { data } = await supabase
+        .from("activities")
+        .select("*")
+        .order("start_time", { ascending: false })
+        .limit(1)
+        .single();
+
+      if (data) {
+        setLatestActivity(data);
+      }
+      setLoading(false);
+    };
+
     fetchLatestActivity();
 
-    // リアルタイム購読（新しい修行データが入ったら自動更新）
     const channel = supabase
       .channel("realtime-activities")
       .on(
