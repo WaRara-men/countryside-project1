@@ -10,13 +10,13 @@
     "test": "jest"
   },
   "dependencies": {
-    "next": "14.2.23",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
+    "next": "15.1.7",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
     "lucide-react": "^0.330.0",
     "@supabase/supabase-js": "^2.39.7",
     "@react-google-maps/api": "^2.19.2",
-    "framer-motion": "^11.0.3",
+    "framer-motion": "^11.18.2",
     "clsx": "^2.1.0",
     "tailwind-merge": "^2.2.1"
   },
