@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { Heart, Activity, HeartPulse, MapPin, Calendar, Clock, TrendingUp } from "lucide-react";
+import { MapPin, Calendar, Clock, TrendingUp, ChevronDown, ChevronUp } from "lucide-react";
 import MapView from "@/components/MapView";
+import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/lib/supabase";
 import { getNearestGoalName } from "@/lib/nakasendo";
 import { getAddressFromCoords } from "@/lib/location";
@@ -28,6 +29,12 @@ export default function FamilyDashboard() {
   const [alerts, setAlerts] = useState<WildlifeAlert[]>([]);
   const [address, setAddress] = useState<string>("位置情報を確認中...");
   const [loading, setLoading] = useState(true);
+  const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
+
+  // 表示する履歴（展開時はすべて、それ以外は最新3件）
+  const visibleActivities = useMemo(() => {
+    return isHistoryExpanded ? activities : activities.slice(0, 3);
+  }, [activities, isHistoryExpanded]);
 
   const safeDate = (dateStr: string | null) => {
     if (!dateStr) return null;
@@ -174,42 +181,67 @@ export default function FamilyDashboard() {
       </header>
 
       <section className="bg-white p-6 rounded-[40px] shadow-sm border border-gray-100 mb-6">
-        <h2 className="text-gray-500 font-bold mb-6 flex items-center gap-2 text-sm uppercase">
-          <Clock className="text-blue-500" size={18} /> 最近の修行履歴
-        </h2>
-        <div className="space-y-10">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-gray-500 font-bold flex items-center gap-2 text-sm uppercase">
+            <Clock className="text-blue-500" size={18} /> 最近の修行履歴
+          </h2>
+        </div>
+        
+        <div className="space-y-10 relative">
           {activities.length === 0 && <p className="text-gray-300 text-xs text-center py-4">まだ履歴がありません</p>}
-          {activities.map((act, index) => {
-            const actDate = safeDate(act.start_time);
-            const prevDate = index > 0 ? safeDate(activities[index-1].start_time) : null;
-            const showDate = index === 0 || (actDate && prevDate && actDate.toDateString() !== prevDate.toDateString());
-            
-            return (
-              <div key={act.id} className="relative">
-                {showDate && actDate && (
-                  <div className="mb-4 flex items-center gap-2">
-                    <span className="bg-gray-100 text-gray-500 text-[10px] font-black px-3 py-1 rounded-full uppercase">
-                      {actDate.toLocaleDateString("ja-JP", { month: "short", day: "numeric", weekday: "short" })}
-                    </span>
-                    <div className="flex-1 h-px bg-gray-50"></div>
+          
+          <AnimatePresence initial={false}>
+            {visibleActivities.map((act, index) => {
+              const actDate = safeDate(act.start_time);
+              const prevDate = index > 0 ? safeDate(visibleActivities[index-1].start_time) : null;
+              const showDate = index === 0 || (actDate && prevDate && actDate.toDateString() !== prevDate.toDateString());
+              
+              return (
+                <motion.div 
+                  key={act.id} 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="relative overflow-hidden"
+                >
+                  {showDate && actDate && (
+                    <div className="mb-4 flex items-center gap-2">
+                      <span className="bg-gray-100 text-gray-500 text-[10px] font-black px-3 py-1 rounded-full uppercase">
+                        {actDate.toLocaleDateString("ja-JP", { month: "short", day: "numeric", weekday: "short" })}
+                      </span>
+                      <div className="flex-1 h-px bg-gray-50"></div>
+                    </div>
+                  )}
+                  <div className="pl-6 border-l-2 border-gray-50 space-y-4 ml-4">
+                    <div className="relative">
+                      <div className="absolute -left-[33px] top-1 w-4 h-4 rounded-full bg-blue-500 border-4 border-white shadow-sm"></div>
+                      <p className="text-sm font-bold text-gray-800">{formatTime(act.start_time)} 出陣</p>
+                    </div>
+                    <div className="relative">
+                      <div className={`absolute -left-[33px] top-1 w-4 h-4 rounded-full ${act.end_time ? 'bg-samurai-green' : 'bg-gray-200'} border-4 border-white shadow-sm`}></div>
+                      <p className="text-sm font-bold text-gray-800">
+                        {act.end_time ? `${formatTime(act.end_time)} 帰還` : '修行中...'}
+                        {act.voice_score > 0 && <span className="ml-2 text-xs text-samurai-gold font-black">元気 {act.voice_score}</span>}
+                      </p>
+                    </div>
                   </div>
-                )}
-                <div className="pl-6 border-l-2 border-gray-50 space-y-4 ml-4">
-                  <div className="relative">
-                    <div className="absolute -left-[33px] top-1 w-4 h-4 rounded-full bg-blue-500 border-4 border-white shadow-sm"></div>
-                    <p className="text-sm font-bold text-gray-800">{formatTime(act.start_time)} 出陣</p>
-                  </div>
-                  <div className="relative">
-                    <div className={`absolute -left-[33px] top-1 w-4 h-4 rounded-full ${act.end_time ? 'bg-samurai-green' : 'bg-gray-200'} border-4 border-white shadow-sm`}></div>
-                    <p className="text-sm font-bold text-gray-800">
-                      {act.end_time ? `${formatTime(act.end_time)} 帰還` : '修行中...'}
-                      {act.voice_score > 0 && <span className="ml-2 text-xs text-samurai-gold font-black">元気 {act.voice_score}</span>}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+
+          {activities.length > 3 && (
+            <button 
+              onClick={() => setIsHistoryExpanded(!isHistoryExpanded)}
+              className="w-full mt-4 py-3 bg-gray-50 rounded-2xl text-gray-500 text-xs font-bold flex items-center justify-center gap-2 hover:bg-gray-100 transition-colors"
+            >
+              {isHistoryExpanded ? (
+                <>履歴をたたむ <ChevronUp size={14} /></>
+              ) : (
+                <>過去の履歴をすべて見る ({activities.length}件) <ChevronDown size={14} /></>
+              )}
+            </button>
+          )}
         </div>
       </section>
 
