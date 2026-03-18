@@ -17,14 +17,22 @@ export function useTracking() {
 
     setIsTracking(true);
     setPath([]);
+    localStorage.removeItem("samurai_pending_path"); // 新規修行なのでリセット
 
     const id = navigator.geolocation.watchPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
-        setPath((prev) => [...prev, { lat: latitude, lng: longitude }]);
+        const newLocation = { lat: latitude, lng: longitude };
+        
+        setPath((prev) => {
+          const updatedPath = [...prev, newLocation];
+          // スマホの保存領域に即座にバックアップ（電波が切れても安心）
+          localStorage.setItem("samurai_pending_path", JSON.stringify(updatedPath));
+          return updatedPath;
+        });
       },
       (error) => console.error("GPSエラー:", error),
-      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
 
     setWatchId(id);
@@ -36,6 +44,7 @@ export function useTracking() {
       setWatchId(null);
     }
     setIsTracking(false);
+    localStorage.removeItem("samurai_pending_path"); // 完了したので削除
     return path;
   }, [watchId, path]);
 

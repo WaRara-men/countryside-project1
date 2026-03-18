@@ -55,7 +55,12 @@ export default function FamilyDashboard() {
   const latest = activities[0];
   const formatTime = (isoString: string | null) => {
     if (!isoString) return "--:--";
-    return new Date(isoString).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+    const date = new Date(isoString);
+    return date.toLocaleTimeString("ja-JP", { 
+      hour: "2-digit", 
+      minute: "2-digit",
+      hour12: false 
+    });
   };
 
   return (
