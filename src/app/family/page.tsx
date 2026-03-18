@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Heart, Activity, HeartPulse, MapPin, Calendar, Clock, TrendingUp } from "lucide-react";
 import MapView from "@/components/MapView";
 import { supabase } from "@/lib/supabase";
@@ -27,7 +27,6 @@ export default function FamilyDashboard() {
   const [address, setAddress] = useState<string>("位置情報を確認中...");
   const [loading, setLoading] = useState(true);
 
-  // 安全な日付変換
   const safeDate = (dateStr: string | null) => {
     if (!dateStr) return null;
     const d = new Date(dateStr);
@@ -46,25 +45,15 @@ export default function FamilyDashboard() {
 
       if (data) {
         const now = new Date();
-        
-        // 1. タイムライン用
-        let activeFound = false;
         const timelineData = data.filter((act: ActivityData) => {
           if (act.end_time) return true;
-          if (!activeFound) {
-            const startDate = safeDate(act.start_time);
-            if (startDate) {
-              const diffHours = (now.getTime() - startDate.getTime()) / (1000 * 60 * 60);
-              if (diffHours < 2) { 
-                activeFound = true;
-                return true;
-              }
-            }
+          const startDate = safeDate(act.start_time);
+          if (startDate) {
+            return (now.getTime() - startDate.getTime()) / (1000 * 60 * 60) < 2;
           }
           return false;
         });
 
-        // 2. グラフ用（直近7日分を必ず生成）
         const dailyStats: { [key: string]: { total: number, count: number } } = {};
         data.forEach(act => {
           if (act.voice_score > 0) {
@@ -108,32 +97,32 @@ export default function FamilyDashboard() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center font-bold">状況を確認中...</div>;
-
-  // 最新の活動（完了したものを優先、なければ最新の活動）
-  const latest = activities.length > 0 ? (activities.find(a => a.end_time) || activities[0]) : null;
+  // latestをuseMemoで計算し、安定させる
+  const latest = useMemo(() => {
+    if (activities.length === 0) return null;
+    return activities.find(a => a.end_time) || activities[0];
+  }, [activities]);
 
   useEffect(() => {
+    let isMounted = true;
     const updateAddress = async () => {
-      // 安全なプロパティアクセスの徹底
-      const path = latest?.path;
-      if (path && Array.isArray(path) && path.length > 0) {
+      if (latest?.path && Array.isArray(latest.path) && latest.path.length > 0) {
         try {
-          const lastPoint = path[path.length - 1];
+          const lastPoint = latest.path[latest.path.length - 1];
           if (lastPoint && typeof lastPoint.lat === 'number' && typeof lastPoint.lng === 'number') {
-            const addr = await getAddressFromCoords(lastPoint.lat, lastPoint.lng).catch(() => "住所取得エラー");
-            setAddress(addr);
+            const addr = await getAddressFromCoords(lastPoint.lat, lastPoint.lng);
+            if (isMounted) setAddress(addr);
           }
         } catch (e) {
-          console.error("Address update failed:", e);
-          setAddress("位置情報を確認中...");
+          if (isMounted) setAddress("住所を取得できませんでした");
         }
-      } else {
-        setAddress("位置情報を確認中...");
       }
     };
     updateAddress();
+    return () => { isMounted = false; };
   }, [latest?.id, latest?.path?.length]);
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center font-bold">状況を確認中...</div>;
 
   const formatTime = (isoString: string | null) => {
     const d = safeDate(isoString);
@@ -143,15 +132,12 @@ export default function FamilyDashboard() {
 
   return (
     <main className="min-h-screen bg-gray-50 p-4 pb-24 font-sans max-w-lg mx-auto">
-      {/* 1. ステータス */}
       <header className="mb-6 bg-white p-6 rounded-[40px] shadow-sm border border-gray-100">
         <div className="flex justify-between items-start mb-4">
           <div>
             <h1 className="text-xl font-bold text-gray-800">父さんの安否</h1>
-            <p className="text-sm text-gray-600 font-bold mt-1">
-              {address}
-            </p>
-            {latest && latest.path && Array.isArray(latest.path) && latest.path.length > 0 && (
+            <p className="text-sm text-gray-600 font-bold mt-1">{address}</p>
+            {latest?.path && Array.isArray(latest.path) && latest.path.length > 0 && (
               <p className="text-[10px] text-samurai-gold font-black uppercase tracking-widest mt-0.5">
                 領内: {getNearestGoalName(latest.path[latest.path.length-1].lat, latest.path[latest.path.length-1].lng)}
               </p>
@@ -166,21 +152,20 @@ export default function FamilyDashboard() {
           <div className="flex-1 text-center">
             <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">元気度</p>
             <div className="flex items-baseline justify-center gap-1">
-              <span className="text-4xl font-black text-gray-900">{latest?.voice_score || "--"}</span>
+              <span className="text-4xl font-black text-gray-900">{latest?.voice_score ?? "--"}</span>
             </div>
           </div>
           <div className="w-px h-10 bg-gray-100"></div>
           <div className="flex-1 text-center">
             <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">距離</p>
             <div className="flex items-baseline justify-center gap-1">
-              <span className="text-4xl font-black text-gray-900">{latest?.distance?.toFixed(2) || "0.0"}</span>
+              <span className="text-4xl font-black text-gray-900">{latest?.distance?.toFixed(2) ?? "0.00"}</span>
               <span className="text-xs font-bold text-gray-400">km</span>
             </div>
           </div>
         </div>
       </header>
 
-      {/* 2. タイムライン */}
       <section className="bg-white p-6 rounded-[40px] shadow-sm border border-gray-100 mb-6">
         <h2 className="text-gray-500 font-bold mb-6 flex items-center gap-2 text-sm uppercase">
           <Clock className="text-blue-500" size={18} /> 最近の修行履歴
@@ -221,7 +206,6 @@ export default function FamilyDashboard() {
         </div>
       </section>
 
-      {/* 3. グラフ */}
       <section className="bg-white p-6 rounded-[40px] shadow-sm border border-gray-100 mb-6">
         <h2 className="text-gray-500 font-bold mb-4 flex items-center gap-2 text-sm uppercase">
           <TrendingUp className="text-red-500" size={18} /> 元気の変化（1週間）
@@ -235,15 +219,12 @@ export default function FamilyDashboard() {
                   style={{ height: `${day.score > 0 ? day.score : 5}%` }}
                 ></div>
               </div>
-              <span className="text-[10px] font-bold text-gray-400">
-                {day.date}
-              </span>
+              <span className="text-[10px] font-bold text-gray-400">{day.date}</span>
             </div>
           ))}
         </div>
       </section>
 
-      {/* 4. 地図 */}
       <section className="bg-white p-4 rounded-[40px] shadow-lg mb-6">
         <h2 className="text-lg font-bold mb-4 px-2 flex items-center gap-2">
           <MapPin className="text-samurai-gold" size={20} /> 今の足跡
@@ -252,9 +233,7 @@ export default function FamilyDashboard() {
       </section>
 
       <div className="fixed bottom-6 left-6 right-6">
-        <button onClick={() => window.location.href='tel:0000000000'} className="w-full bg-samurai-black text-white py-5 rounded-3xl font-bold shadow-xl active:scale-95 transition-transform">
-          電話をかける
-        </button>
+        <button onClick={() => window.location.href='tel:0000000000'} className="w-full bg-samurai-black text-white py-5 rounded-3xl font-bold shadow-xl active:scale-95 transition-transform">電話をかける</button>
       </div>
     </main>
   );

@@ -98,7 +98,7 @@ export default function MapView({ path, alerts = [] }: MapViewProps) {
         <Marker 
           position={path[path.length - 1]} 
           icon={{
-            path: google.maps.SymbolPath.CIRCLE,
+            path: 0, // google.maps.SymbolPath.CIRCLE
             fillColor: "#EF4444",
             fillOpacity: 1,
             strokeColor: "white",
