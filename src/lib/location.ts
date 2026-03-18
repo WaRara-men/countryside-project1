@@ -1,33 +1,39 @@
 /**
  * OpenStreetMap (Nominatim API) を使用して緯度経度から住所を取得する
- * 
- * ※利用規約: 1秒間に1回以上のリクエストを避けること
  */
 export async function getAddressFromCoords(lat: number, lng: number): Promise<string> {
+  // 緯度経度が異常な場合は早期リターン
+  if (typeof lat !== 'number' || typeof lng !== 'number' || isNaN(lat) || isNaN(lng)) {
+    return "位置情報が不正です";
+  }
+
   try {
+    // ブラウザのfetchでは User-Agent ヘッダーの設定は禁止されているため削除
     const response = await fetch(
       `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
       {
         headers: {
-          "Accept-Language": "ja",
-          "User-Agent": "AnnakaSamuraiApp/1.0" // 利用規約に基づきアプリケーション名を指定
+          "Accept-Language": "ja"
         }
       }
     );
+
+    if (!response.ok) throw new Error("Network response was not ok");
+    
     const data = await response.json();
     
     if (data && data.address) {
       const addr = data.address;
-      // 日本の住所形式に合わせて組み立て (市町村 + 町名)
       const city = addr.city || addr.town || addr.village || addr.suburb || "";
       const suburb = addr.suburb || addr.neighbourhood || "";
       const road = addr.road || "";
       
-      return city + (suburb ? ` ${suburb}` : "") + (road ? ` ${road}` : "");
+      const result = [city, suburb, road].filter(Boolean).join(" ");
+      return result || "住所不明なエリア";
     }
     return "場所を特定できませんでした";
   } catch (error) {
     console.error("住所取得エラー:", error);
-    return "住所取得に失敗";
+    return "住所の取得に失敗しました";
   }
 }

@@ -115,15 +115,18 @@ export default function FamilyDashboard() {
 
   useEffect(() => {
     const updateAddress = async () => {
-      if (latest && latest.path && Array.isArray(latest.path) && latest.path.length > 0) {
+      // 安全なプロパティアクセスの徹底
+      const path = latest?.path;
+      if (path && Array.isArray(path) && path.length > 0) {
         try {
-          const lastPoint = latest.path[latest.path.length - 1];
-          if (lastPoint && typeof lastPoint.lat === 'number') {
-            const addr = await getAddressFromCoords(lastPoint.lat, lastPoint.lng);
+          const lastPoint = path[path.length - 1];
+          if (lastPoint && typeof lastPoint.lat === 'number' && typeof lastPoint.lng === 'number') {
+            const addr = await getAddressFromCoords(lastPoint.lat, lastPoint.lng).catch(() => "住所取得エラー");
             setAddress(addr);
           }
         } catch (e) {
-          setAddress("住所を取得できませんでした");
+          console.error("Address update failed:", e);
+          setAddress("位置情報を確認中...");
         }
       } else {
         setAddress("位置情報を確認中...");
