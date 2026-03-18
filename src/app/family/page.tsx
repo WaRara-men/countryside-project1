@@ -5,6 +5,7 @@ import { Heart, Activity, HeartPulse, MapPin, Calendar, Clock, TrendingUp } from
 import MapView from "@/components/MapView";
 import { supabase } from "@/lib/supabase";
 import { getNearestGoalName } from "@/lib/nakasendo";
+import { getAddressFromCoords } from "@/lib/location";
 
 interface ActivityData {
   id: string;
@@ -23,6 +24,7 @@ interface ChartData {
 export default function FamilyDashboard() {
   const [activities, setActivities] = useState<ActivityData[]>([]);
   const [chartActivities, setChartActivities] = useState<ChartData[]>([]);
+  const [address, setAddress] = useState<string>("位置情報を確認中...");
   const [loading, setLoading] = useState(true);
 
   const fetchActivities = async () => {
@@ -88,6 +90,17 @@ export default function FamilyDashboard() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
+  useEffect(() => {
+    const updateAddress = async () => {
+      if (latest?.path && latest.path.length > 0) {
+        const lastPoint = latest.path[latest.path.length - 1];
+        const addr = await getAddressFromCoords(lastPoint.lat, lastPoint.lng);
+        setAddress(addr);
+      }
+    };
+    updateAddress();
+  }, [latest?.path]);
+
   if (loading) return <div className="min-h-screen flex items-center justify-center font-bold">状況を確認中...</div>;
 
   const latest = activities.find(a => a.end_time) || activities[0];
@@ -104,16 +117,14 @@ export default function FamilyDashboard() {
         <div className="flex justify-between items-start mb-4">
           <div>
             <h1 className="text-xl font-bold text-gray-800">父さんの安否</h1>
-            <p className="text-sm text-samurai-gold font-black mt-1">
-              {latest?.path?.length > 0 
-                ? `${getNearestGoalName(latest.path[latest.path.length-1].lat, latest.path[latest.path.length-1].lng)}`
-                : "位置情報を取得中..."}
+            <p className="text-sm text-gray-600 font-bold mt-1">
+              {address}
             </p>
-            <p className="text-[10px] text-gray-400 font-mono">
-              {latest?.path?.length > 0 
-                ? `${latest.path[latest.path.length-1].lat.toFixed(4)}, ${latest.path[latest.path.length-1].lng.toFixed(4)}`
-                : ""}
-            </p>
+            {latest?.path?.length > 0 && (
+              <p className="text-[10px] text-samurai-gold font-black uppercase tracking-widest mt-0.5">
+                領内: {getNearestGoalName(latest.path[latest.path.length-1].lat, latest.path[latest.path.length-1].lng)}
+              </p>
+            )}
           </div>
           <div className={`${latest?.end_time ? 'bg-samurai-green/10 text-samurai-green' : 'bg-samurai-gold/10 text-samurai-gold'} px-4 py-2 rounded-full text-sm font-black animate-pulse`}>
             {latest?.end_time ? '帰宅済み' : '修行中'}
