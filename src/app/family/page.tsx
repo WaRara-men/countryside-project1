@@ -92,18 +92,20 @@ export default function FamilyDashboard() {
 
   if (loading) return <div className="min-h-screen flex items-center justify-center font-bold">状況を確認中...</div>;
 
-  const latest = activities.find(a => a.end_time) || activities[0];
+  const latest = activities.length > 0 ? (activities.find(a => a.end_time) || activities[0]) : null;
 
   useEffect(() => {
     const updateAddress = async () => {
-      if (latest?.path && latest.path.length > 0) {
+      if (latest && latest.path && latest.path.length > 0) {
         const lastPoint = latest.path[latest.path.length - 1];
         const addr = await getAddressFromCoords(lastPoint.lat, lastPoint.lng);
         setAddress(addr);
+      } else {
+        setAddress("位置情報を確認中...");
       }
     };
     updateAddress();
-  }, [latest?.path]);
+  }, [latest?.id, latest?.path?.length]); // IDまたはパスの長さが変わった時に更新
 
   const formatTime = (isoString: string | null) => {
     if (!isoString) return "--:--";
