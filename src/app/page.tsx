@@ -179,9 +179,14 @@ export default function ElderlyPage() {
               
               <div className="bg-white/5 rounded-[40px] p-8 backdrop-blur-sm border border-white/10">
                 <p className="text-elderly-base text-samurai-gold font-bold mb-2">現在の修行距離</p>
-                <p className="text-[5rem] font-black leading-none mb-2">
-                  {(path.length * 0.01).toFixed(2)} <span className="text-elderly-lg">km</span>
-                </p>
+                <div className="flex flex-col items-center">
+                  <p className="text-[5rem] font-black leading-none">
+                    {(path.length * 0.01).toFixed(2)} <span className="text-elderly-lg">km</span>
+                  </p>
+                  <p className="text-elderly-lg font-bold text-samurai-green mt-2">
+                    約 {Math.floor(path.length * 0.01 * 1400).toLocaleString()} 歩
+                  </p>
+                </div>
                 <div className="w-full bg-gray-800 h-4 rounded-full mt-4 overflow-hidden">
                   <motion.div 
                     className="h-full bg-samurai-green"
