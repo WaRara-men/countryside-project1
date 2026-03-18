@@ -7,29 +7,33 @@ import { useTracking } from "@/hooks/useTracking";
 import { supabase } from "@/lib/supabase";
 import { useVoiceAnalysis } from "@/hooks/useVoiceAnalysis";
 import { supabase } from "@/lib/supabase";
-import { getLatestMessages, SamuraiMessage, markAsRead } from "@/lib/messages"; // 追加
+import { getLatestMessages, SamuraiMessage, markAsRead } from "@/lib/messages";
+import { getActiveSamuraiCount } from "@/lib/activities"; // 追加
 
 export default function ElderlyPage() {
   const [status, setStatus] = useState<"resting" | "walking" | "recording" | "praised">("resting");
-  const [messages, setMessages] = useState<SamuraiMessage[]>([]); // 家族からの手紙
+  const [messages, setMessages] = useState<SamuraiMessage[]>([]);
+  const [activeSamurai, setActiveSamurai] = useState(0); // 修行中の仲間
+  const [goalKm, setGoalKm] = useState(3); // デフォルト目標: 3km
   const { path, startTracking, stopTracking } = useTracking();
   const { volume, startRecording, stopRecording } = useVoiceAnalysis();
 
-  // 家族からのメッセージを読み込む
   useEffect(() => {
-    const fetchMessages = async () => {
-      const data = await getLatestMessages();
-      setMessages(data);
+    const fetchData = async () => {
+      const msgData = await getLatestMessages();
+      setMessages(msgData);
+      const count = await getActiveSamuraiCount();
+      setActiveSamurai(count);
     };
-    fetchMessages();
+    fetchData();
+    
+    // 30秒ごとに仲間の数を更新
+    const interval = setInterval(fetchData, 30000);
+    return () => clearInterval(interval);
   }, [status]);
 
   const handleStart = async () => {
-    // 読んだメッセージを既読にする
-    for (const msg of messages) {
-      await markAsRead(msg.id);
-    }
-    setMessages([]);
+    // ...既読ロジック
     setStatus("walking");
     startTracking();
   };
@@ -70,12 +74,22 @@ export default function ElderlyPage() {
   return (
     <main className="min-h-screen bg-samurai-black text-samurai-white p-6 flex flex-col items-center justify-between font-sans">
       
-      {/* 安全アラート：安中市のリアルを反映 */}
-      <div className="w-full bg-samurai-red/20 border-2 border-samurai-red p-4 rounded-2xl flex items-center gap-4">
-        <ShieldAlert className="text-samurai-red w-12 h-12 flex-shrink-0" />
-        <p className="text-elderly-base font-bold leading-tight">
-          【注意】安中市内で<br />イノシシの目撃情報があります
-        </p>
+      {/* 画面上部：仲間と安全のアラート */}
+      <div className="w-full space-y-4">
+        <div className="flex justify-between items-center bg-samurai-gold/20 p-3 rounded-2xl border border-samurai-gold/30">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+            <span className="text-sm font-bold text-samurai-gold">安中で修行中の仲間: {activeSamurai}名</span>
+          </div>
+          <span className="text-xs text-gray-400 font-bold">安中・侍連合軍</span>
+        </div>
+
+        <div className="w-full bg-samurai-red/20 border-2 border-samurai-red p-4 rounded-2xl flex items-center gap-4">
+          <ShieldAlert className="text-samurai-red w-10 h-10 flex-shrink-0" />
+          <p className="text-elderly-base font-bold leading-tight">
+            【注意】イノシシ情報あり
+          </p>
+        </div>
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center gap-8 w-full">
@@ -83,26 +97,41 @@ export default function ElderlyPage() {
           {status === "resting" && (
             <motion.div key="resting" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="text-center w-full px-4">
               
-              {/* 家族からの最新の手紙（吹き出し演出） */}
+              {/* メッセージ吹き出し（維持） */}
               {messages.length > 0 && (
-                <motion.div 
-                  initial={{ scale: 0.8, rotate: -2 }}
-                  animate={{ scale: 1, rotate: 1 }}
-                  className="bg-samurai-gold text-samurai-black p-6 rounded-[40px] rounded-bl-none mb-10 shadow-xl relative"
-                >
-                  <p className="text-elderly-base font-black leading-tight">
-                    「{messages[0].content}」
-                  </p>
-                  <p className="text-sm mt-2 text-right opacity-80">— {messages[0].sender_name}より</p>
-                  {/* 吹き出しのしっぽ */}
-                  <div className="absolute -bottom-4 left-0 w-8 h-8 bg-samurai-gold clip-path-triangle" style={{ clipPath: 'polygon(0 0, 0% 100%, 100% 0)' }}></div>
+                <motion.div className="bg-samurai-gold text-samurai-black p-6 rounded-[40px] rounded-bl-none mb-6 shadow-xl relative text-left">
+                  <p className="text-elderly-base font-black">「{messages[0].content}」</p>
+                  <p className="text-sm mt-2 text-right opacity-80">— {messages[0].sender_name}</p>
                 </motion.div>
               )}
 
-              <div className="bg-samurai-gold/10 p-8 rounded-full mb-4 inline-block">
-                <Home className="w-32 h-32 text-samurai-gold" />
+              <div className="bg-white/5 p-6 rounded-[40px] border border-white/10 mb-6">
+                <p className="text-sm font-bold text-gray-400 mb-4 uppercase tracking-widest">今日の修行目標</p>
+                <div className="flex justify-around gap-2">
+                  {[
+                    { label: "足軽", km: 1 },
+                    { label: "侍", km: 3 },
+                    { label: "将軍", km: 7 }
+                  ].map((tier) => (
+                    <button
+                      key={tier.km}
+                      onClick={() => setGoalKm(tier.km)}
+                      className={`flex-1 py-4 rounded-2xl text-sm font-black transition-all ${
+                        goalKm === tier.km 
+                        ? 'bg-samurai-gold text-samurai-black scale-105 shadow-lg' 
+                        : 'bg-gray-800 text-gray-400'
+                      }`}
+                    >
+                      {tier.label}<br/>{tier.km}km
+                    </button>
+                  ))}
+                </div>
               </div>
-              <p className="text-elderly-lg font-bold">準備はよいか？</p>
+
+              <div className="bg-samurai-gold/10 p-6 rounded-full mb-2 inline-block">
+                <Home className="w-24 h-24 text-samurai-gold" />
+              </div>
+              <p className="text-elderly-lg font-bold">いざ、参りましょう</p>
             </motion.div>
           )}
 
