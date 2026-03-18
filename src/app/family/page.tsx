@@ -90,6 +90,10 @@ export default function FamilyDashboard() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
+  if (loading) return <div className="min-h-screen flex items-center justify-center font-bold">状況を確認中...</div>;
+
+  const latest = activities.find(a => a.end_time) || activities[0];
+
   useEffect(() => {
     const updateAddress = async () => {
       if (latest?.path && latest.path.length > 0) {
@@ -101,9 +105,6 @@ export default function FamilyDashboard() {
     updateAddress();
   }, [latest?.path]);
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center font-bold">状況を確認中...</div>;
-
-  const latest = activities.find(a => a.end_time) || activities[0];
   const formatTime = (isoString: string | null) => {
     if (!isoString) return "--:--";
     const date = new Date(isoString);
