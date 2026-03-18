@@ -1,14 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ShieldAlert, Footprints, Home, Mic, Award } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTracking } from "@/hooks/useTracking";
 import { supabase } from "@/lib/supabase";
 import { useVoiceAnalysis } from "@/hooks/useVoiceAnalysis";
-import { supabase } from "@/lib/supabase";
 import { getLatestMessages, SamuraiMessage, markAsRead } from "@/lib/messages";
-import { getActiveSamuraiCount } from "@/lib/activities"; // 追加
+import { getActiveSamuraiCount } from "@/lib/activities";
 
 export default function ElderlyPage() {
   const [status, setStatus] = useState<"resting" | "walking" | "recording" | "praised">("resting");
@@ -18,6 +17,7 @@ export default function ElderlyPage() {
   const { path, startTracking, stopTracking } = useTracking();
   const { volume, startRecording, stopRecording } = useVoiceAnalysis();
 
+  // 家族からのメッセージと仲間の数を読み込む
   useEffect(() => {
     const fetchData = async () => {
       const msgData = await getLatestMessages();
@@ -33,10 +33,15 @@ export default function ElderlyPage() {
   }, [status]);
 
   const handleStart = async () => {
-    // ...既読ロジック
+    // 読んだメッセージを既読にする（復元）
+    for (const msg of messages) {
+      await markAsRead(msg.id);
+    }
+    setMessages([]);
     setStatus("walking");
     startTracking();
   };
+
   const handleEnd = async () => {
     const finalPath = stopTracking();
     setStatus("recording");
@@ -49,7 +54,6 @@ export default function ElderlyPage() {
       const peakVolume = stopRecording();
       
       // 最大音量に基づいた「元気度スコア」を算出
-      // （小さな声なら低く、ハリのある声なら高くなるように調整）
       const score = Math.min(100, Math.max(60, Math.floor(peakVolume * 1.5)));
 
       // Supabaseへデータを保存
@@ -97,16 +101,23 @@ export default function ElderlyPage() {
           {status === "resting" && (
             <motion.div key="resting" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="text-center w-full px-4">
               
-              {/* メッセージ吹き出し（維持） */}
+              {/* 家族からの最新の手紙 */}
               {messages.length > 0 && (
-                <motion.div className="bg-samurai-gold text-samurai-black p-6 rounded-[40px] rounded-bl-none mb-6 shadow-xl relative text-left">
-                  <p className="text-elderly-base font-black">「{messages[0].content}」</p>
-                  <p className="text-sm mt-2 text-right opacity-80">— {messages[0].sender_name}</p>
+                <motion.div 
+                  initial={{ scale: 0.8, rotate: -2 }}
+                  animate={{ scale: 1, rotate: 1 }}
+                  className="bg-samurai-gold text-samurai-black p-6 rounded-[40px] rounded-bl-none mb-6 shadow-xl relative text-left"
+                >
+                  <p className="text-elderly-base font-black leading-tight">
+                    「{messages[0].content}」
+                  </p>
+                  <p className="text-sm mt-2 text-right opacity-80">— {messages[0].sender_name}より</p>
+                  <div className="absolute -bottom-4 left-0 w-8 h-8 bg-samurai-gold clip-path-triangle" style={{ clipPath: 'polygon(0 0, 0% 100%, 100% 0)' }}></div>
                 </motion.div>
               )}
 
-              <div className="bg-white/5 p-6 rounded-[40px] border border-white/10 mb-6">
-                <p className="text-sm font-bold text-gray-400 mb-4 uppercase tracking-widest">今日の修行目標</p>
+              <div className="bg-white/5 p-6 rounded-[40px] border border-white/10 mb-6 text-center">
+                <p className="text-sm font-bold text-gray-400 mb-4 uppercase tracking-widest text-center">今日の修行目標</p>
                 <div className="flex justify-around gap-2">
                   {[
                     { label: "足軽", km: 1 },
@@ -131,14 +142,13 @@ export default function ElderlyPage() {
               <div className="bg-samurai-gold/10 p-6 rounded-full mb-2 inline-block">
                 <Home className="w-24 h-24 text-samurai-gold" />
               </div>
-              <p className="text-elderly-lg font-bold">いざ、参りましょう</p>
+              <p className="text-elderly-lg font-bold">準備はよいか？</p>
             </motion.div>
           )}
 
           {status === "walking" && (
             <motion.div key="walking" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="text-center w-full">
               <div className="relative inline-block mb-4">
-                {/* 侍の行軍アニメーション */}
                 <motion.div
                   animate={{ x: [-10, 10, -10] }}
                   transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
@@ -156,21 +166,19 @@ export default function ElderlyPage() {
                   {(path.length * 0.01).toFixed(2)} <span className="text-elderly-lg">km</span>
                 </p>
                 <div className="w-full bg-gray-800 h-4 rounded-full mt-4 overflow-hidden">
-                  {/* 1万歩(約7km)をゴールとした進捗バー */}
                   <motion.div 
                     className="h-full bg-samurai-green"
                     initial={{ width: 0 }}
-                    animate={{ width: `${Math.min(100, (path.length * 0.01 / 7) * 100)}%` }}
+                    animate={{ width: `${Math.min(100, (path.length * 0.01 / goalKm) * 100)}%` }}
                   />
                 </div>
-                <p className="text-sm text-gray-400 mt-4">安中宿から松井田宿へ向けて進軍中...</p>
+                <p className="text-sm text-gray-400 mt-4">目標 {goalKm}km に向けて進軍中...</p>
               </div>
             </motion.div>
           )}
 
           {status === "recording" && (
             <motion.div key="recording" className="text-center relative">
-              {/* 声の大きさに反応する波形（同心円） */}
               <motion.div 
                 className="absolute inset-0 bg-samurai-red/30 rounded-full"
                 animate={{ scale: 1 + (volume / 100) }}
@@ -181,8 +189,7 @@ export default function ElderlyPage() {
                 animate={{ scale: 1 + (volume / 50) }}
                 transition={{ type: "spring", damping: 10 }}
               />
-              
-              <Mic className="w-40 h-40 text-samurai-red relative z-10" />
+              <Mic className="w-40 h-40 text-samurai-red relative z-10 mx-auto" />
               <p className="text-elderly-lg font-bold mt-4">「ただいま」と<br />お話しください</p>
             </motion.div>
           )}
