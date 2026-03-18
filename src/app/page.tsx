@@ -24,15 +24,15 @@ export default function ElderlyPage() {
 
     // 2. Supabaseへデータを保存
     try {
-      const { error } = await supabase.from("activities").insert([
+      const { error: insertError } = await supabase.from("activities").insert([
         {
           path: finalPath,
           voice_score: score,
-          distance: finalPath.length * 0.01, // 簡易的な距離計算
+          distance: finalPath.length * 0.01,
           is_warning: score < 70,
         },
       ]);
-      if (error) throw error;
+      if (insertError) throw insertError;
       console.log("修行の成果を家族に届けました！");
     } catch (err) {
       console.error("保存失敗:", err);
