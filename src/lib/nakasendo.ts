@@ -68,3 +68,18 @@ export function getNearestGoalName(lat: number, lng: number): string {
 
   return minDistance < 2 ? `${nearestGoal}付近` : "安中市";
 }
+
+/**
+ * 座標配列（path）から総移動距離(km)を計算する
+ */
+export function calculateTotalPathDistance(path: { lat: number; lng: number }[]): number {
+  if (!path || path.length < 2) return 0;
+  let total = 0;
+  for (let i = 0; i < path.length - 1; i++) {
+    total += calculateDistance(
+      path[i].lat, path[i].lng,
+      path[i+1].lat, path[i+1].lng
+    );
+  }
+  return total;
+}
