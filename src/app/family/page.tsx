@@ -27,58 +27,76 @@ export default function FamilyDashboard() {
   const [address, setAddress] = useState<string>("位置情報を確認中...");
   const [loading, setLoading] = useState(true);
 
+  // 安全な日付変換
+  const safeDate = (dateStr: string | null) => {
+    if (!dateStr) return null;
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
   const fetchActivities = async () => {
-    const { data } = await supabase
-      .from("activities")
-      .select("*")
-      .order("start_time", { ascending: false })
-      .limit(100);
+    try {
+      const { data, error } = await supabase
+        .from("activities")
+        .select("*")
+        .order("start_time", { ascending: false })
+        .limit(100);
 
-    if (data) {
-      const now = new Date();
-      
-      // 1. タイムライン用
-      let activeFound = false;
-      const timelineData = data.filter((act: ActivityData) => {
-        if (act.end_time) return true;
-        if (!activeFound) {
-          const startTime = new Date(act.start_time);
-          const diffHours = (now.getTime() - startTime.getTime()) / (1000 * 60 * 60);
-          if (diffHours < 2) { // 2時間以内なら表示
-            activeFound = true;
-            return true;
+      if (error) throw error;
+
+      if (data) {
+        const now = new Date();
+        
+        // 1. タイムライン用
+        let activeFound = false;
+        const timelineData = data.filter((act: ActivityData) => {
+          if (act.end_time) return true;
+          if (!activeFound) {
+            const startDate = safeDate(act.start_time);
+            if (startDate) {
+              const diffHours = (now.getTime() - startDate.getTime()) / (1000 * 60 * 60);
+              if (diffHours < 2) { 
+                activeFound = true;
+                return true;
+              }
+            }
           }
-        }
-        return false;
-      });
-
-      // 2. グラフ用（直近7日分の枠を確実に作る）
-      const dailyStats: { [key: string]: { total: number, count: number } } = {};
-      data.forEach(act => {
-        if (act.voice_score > 0) {
-          const d = new Date(act.start_time);
-          const key = `${d.getMonth() + 1}/${d.getDate()}`;
-          if (!dailyStats[key]) dailyStats[key] = { total: 0, count: 0 };
-          dailyStats[key].total += act.voice_score;
-          dailyStats[key].count += 1;
-        }
-      });
-
-      const last7Days: ChartData[] = [];
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        const key = `${d.getMonth() + 1}/${d.getDate()}`;
-        last7Days.push({
-          date: key,
-          score: dailyStats[key] ? Math.round(dailyStats[key].total / dailyStats[key].count) : 0
+          return false;
         });
-      }
 
-      setActivities(timelineData.slice(0, 15));
-      setChartActivities(last7Days);
+        // 2. グラフ用（直近7日分を必ず生成）
+        const dailyStats: { [key: string]: { total: number, count: number } } = {};
+        data.forEach(act => {
+          if (act.voice_score > 0) {
+            const d = safeDate(act.start_time);
+            if (d) {
+              const key = `${d.getMonth() + 1}/${d.getDate()}`;
+              if (!dailyStats[key]) dailyStats[key] = { total: 0, count: 0 };
+              dailyStats[key].total += act.voice_score;
+              dailyStats[key].count += 1;
+            }
+          }
+        });
+
+        const last7Days: ChartData[] = [];
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          const key = `${d.getMonth() + 1}/${d.getDate()}`;
+          last7Days.push({
+            date: key,
+            score: dailyStats[key] ? Math.round(dailyStats[key].total / dailyStats[key].count) : 0
+          });
+        }
+
+        setActivities(timelineData.slice(0, 15));
+        setChartActivities(last7Days);
+      }
+    } catch (err) {
+      console.error("Fetch Error:", err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -92,25 +110,32 @@ export default function FamilyDashboard() {
 
   if (loading) return <div className="min-h-screen flex items-center justify-center font-bold">状況を確認中...</div>;
 
+  // 最新の活動（完了したものを優先、なければ最新の活動）
   const latest = activities.length > 0 ? (activities.find(a => a.end_time) || activities[0]) : null;
 
   useEffect(() => {
     const updateAddress = async () => {
-      if (latest && latest.path && latest.path.length > 0) {
-        const lastPoint = latest.path[latest.path.length - 1];
-        const addr = await getAddressFromCoords(lastPoint.lat, lastPoint.lng);
-        setAddress(addr);
+      if (latest && latest.path && Array.isArray(latest.path) && latest.path.length > 0) {
+        try {
+          const lastPoint = latest.path[latest.path.length - 1];
+          if (lastPoint && typeof lastPoint.lat === 'number') {
+            const addr = await getAddressFromCoords(lastPoint.lat, lastPoint.lng);
+            setAddress(addr);
+          }
+        } catch (e) {
+          setAddress("住所を取得できませんでした");
+        }
       } else {
         setAddress("位置情報を確認中...");
       }
     };
     updateAddress();
-  }, [latest?.id, latest?.path?.length]); // IDまたはパスの長さが変わった時に更新
+  }, [latest?.id, latest?.path?.length]);
 
   const formatTime = (isoString: string | null) => {
-    if (!isoString) return "--:--";
-    const date = new Date(isoString);
-    return date.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", hour12: false });
+    const d = safeDate(isoString);
+    if (!d) return "--:--";
+    return d.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", hour12: false });
   };
 
   return (
@@ -123,7 +148,7 @@ export default function FamilyDashboard() {
             <p className="text-sm text-gray-600 font-bold mt-1">
               {address}
             </p>
-            {latest && latest.path && latest.path.length > 0 && (
+            {latest && latest.path && Array.isArray(latest.path) && latest.path.length > 0 && (
               <p className="text-[10px] text-samurai-gold font-black uppercase tracking-widest mt-0.5">
                 領内: {getNearestGoalName(latest.path[latest.path.length-1].lat, latest.path[latest.path.length-1].lng)}
               </p>
@@ -160,15 +185,16 @@ export default function FamilyDashboard() {
         <div className="space-y-10">
           {activities.length === 0 && <p className="text-gray-300 text-xs text-center py-4">まだ履歴がありません</p>}
           {activities.map((act, index) => {
-            const showDate = index === 0 || 
-              new Date(act.start_time).toDateString() !== new Date(activities[index-1].start_time).toDateString();
+            const actDate = safeDate(act.start_time);
+            const prevDate = index > 0 ? safeDate(activities[index-1].start_time) : null;
+            const showDate = index === 0 || (actDate && prevDate && actDate.toDateString() !== prevDate.toDateString());
             
             return (
               <div key={act.id} className="relative">
-                {showDate && (
+                {showDate && actDate && (
                   <div className="mb-4 flex items-center gap-2">
                     <span className="bg-gray-100 text-gray-500 text-[10px] font-black px-3 py-1 rounded-full uppercase">
-                      {new Date(act.start_time).toLocaleDateString("ja-JP", { month: "short", day: "numeric", weekday: "short" })}
+                      {actDate.toLocaleDateString("ja-JP", { month: "short", day: "numeric", weekday: "short" })}
                     </span>
                     <div className="flex-1 h-px bg-gray-50"></div>
                   </div>
