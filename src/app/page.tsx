@@ -7,7 +7,7 @@ import { useTracking } from "@/hooks/useTracking";
 import { supabase } from "@/lib/supabase";
 import { useVoiceAnalysis } from "@/hooks/useVoiceAnalysis";
 import { getLatestMessages, SamuraiMessage, markAsRead } from "@/lib/messages";
-import { getActiveSamuraiCount } from "@/lib/activities";
+import { getActiveSamuraiCount, getUserSamuraiRank } from "@/lib/activities";
 import { syncPathToSupabase, setupSyncListener } from "@/lib/offlineSync";
 import { calculateTotalPathDistance, calculateNakasendoProgress } from "@/lib/nakasendo";
 
@@ -17,6 +17,8 @@ export default function ElderlyPage() {
   const [currentActivityId, setCurrentActivityId] = useState<string | null>(null);
   const [messages, setMessages] = useState<SamuraiMessage[]>([]);
   const [activeSamurai, setActiveSamurai] = useState(0);
+  const [userRank, setUserRank] = useState({ rank: "門下生", totalSteps: 0, nextRankSteps: 5000 });
+  const [goalKm, setGoalKm] = useState(1); // デフォルト1km
   const [isOnline, setIsOnline] = useState(true);
   
   const { path, startTracking, stopTracking, setPath } = useTracking();
@@ -28,8 +30,8 @@ export default function ElderlyPage() {
   // 中山道の宿場町進捗
   const progress = useMemo(() => calculateNakasendoProgress(currentDistance), [currentDistance]);
   
-  // 歩数は引き続き距離ベース（1km = 1400歩）で表示
-  const currentSteps = useMemo(() => Math.floor(currentDistance * 1400), [currentDistance]);
+  // 歩数は距離ベース（1km = 1500歩）で表示
+  const currentSteps = useMemo(() => Math.floor(currentDistance * 1500), [currentDistance]);
 
   useEffect(() => {
     const savedStatus = localStorage.getItem("samurai_status");
@@ -43,12 +45,17 @@ export default function ElderlyPage() {
 
     const fetchData = async () => {
       try {
-        const [msgData, count] = await Promise.all([
+        const params = new URLSearchParams(window.location.search);
+        const username = params.get("user") || "不明な侍";
+
+        const [msgData, count, rankInfo] = await Promise.all([
           getLatestMessages().catch(() => []),
-          getActiveSamuraiCount().catch(() => 0)
+          getActiveSamuraiCount().catch(() => 0),
+          getUserSamuraiRank(username).catch(() => ({ rank: "門下生", totalSteps: 0, nextRankSteps: 5000 }))
         ]);
         setMessages(msgData);
         setActiveSamurai(count);
+        setUserRank(rankInfo);
       } catch (err) {
         console.error("データ取得失敗:", err);
       }
@@ -183,17 +190,53 @@ export default function ElderlyPage() {
       <div className="flex-1 flex flex-col items-center justify-center gap-8 w-full">
         <AnimatePresence mode="wait">
           {status === "resting" && (
-            <motion.div key="resting" className="text-center w-full px-4">
+            <motion.div key="resting" className="text-center w-full px-4 space-y-6">
+              {/* 1. 侍の称号（累計実績） */}
+              <div className="bg-samurai-gold/10 border-2 border-samurai-gold/30 p-4 rounded-[32px]">
+                <p className="text-xs text-samurai-gold font-bold uppercase tracking-tighter mb-1">現在の階級</p>
+                <h2 className="text-3xl font-black text-samurai-gold">{userRank.rank}</h2>
+                <div className="mt-2 bg-black/40 rounded-full h-2 w-full overflow-hidden border border-samurai-gold/20">
+                  <div 
+                    className="h-full bg-samurai-gold shadow-[0_0_10px_rgba(255,215,0,0.5)] transition-all duration-1000" 
+                    style={{ width: `${Math.min(100, (userRank.totalSteps / userRank.nextRankSteps) * 100)}%` }}
+                  ></div>
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1">累計 {userRank.totalSteps.toLocaleString()} 歩</p>
+              </div>
+
+              {/* 2. メッセージ */}
               {messages.length > 0 && (
-                <div className="bg-samurai-gold text-samurai-black p-6 rounded-[40px] rounded-bl-none mb-6 shadow-xl relative text-left">
-                  <p className="text-elderly-base font-black">「{messages[0].content}」</p>
-                  <p className="text-sm mt-2 text-right opacity-80">— {messages[0].sender_name}</p>
+                <div className="bg-samurai-gold text-samurai-black p-5 rounded-[32px] rounded-bl-none shadow-xl relative text-left">
+                  <p className="text-sm font-black italic">「{messages[0].content}」</p>
+                  <p className="text-[10px] mt-1 text-right opacity-70">— {messages[0].sender_name}</p>
                 </div>
               )}
-              <div className="bg-samurai-gold/10 p-6 rounded-full mb-2 inline-block">
-                <Home className="w-24 h-24 text-samurai-gold" />
+
+              {/* 3. 本日の目標選択 */}
+              <div className="space-y-3">
+                <p className="text-elderly-base font-bold text-gray-400">本日の修行目標</p>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { km: 1, steps: 1500, label: "初級" },
+                    { km: 3, steps: 4500, label: "中級" },
+                    { km: 7, steps: 10500, label: "上級" }
+                  ].map((target) => (
+                    <button
+                      key={target.km}
+                      onClick={() => setGoalKm(target.km)}
+                      className={`p-4 rounded-3xl border-4 transition-all ${
+                        goalKm === target.km 
+                          ? "border-samurai-green bg-samurai-green/20 scale-105" 
+                          : "border-white/5 bg-white/5"
+                      }`}
+                    >
+                      <p className="text-[10px] font-bold text-gray-400">{target.label}</p>
+                      <p className="text-xl font-black">{target.steps.toLocaleString()}</p>
+                      <p className="text-[10px] font-bold opacity-60">歩</p>
+                    </button>
+                  ))}
+                </div>
               </div>
-              <p className="text-elderly-lg font-bold">準備はよいか？</p>
             </motion.div>
           )}
 
