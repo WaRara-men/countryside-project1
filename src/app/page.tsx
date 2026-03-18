@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { ShieldAlert, Footprints, Home, Mic, Award, WifiOff, Wifi } from "lucide-react";
+import { ShieldAlert, Footprints, Home, Mic, Award, WifiOff, Wifi, AlertTriangle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTracking } from "@/hooks/useTracking";
 import { supabase } from "@/lib/supabase";
@@ -9,29 +9,37 @@ import { useVoiceAnalysis } from "@/hooks/useVoiceAnalysis";
 import { getLatestMessages, SamuraiMessage, markAsRead } from "@/lib/messages";
 import { getActiveSamuraiCount, getUserSamuraiRank } from "@/lib/activities";
 import { syncPathToSupabase, setupSyncListener } from "@/lib/offlineSync";
-import { calculateTotalPathDistance, calculateNakasendoProgress } from "@/lib/nakasendo";
+import { calculateTotalPathDistance, calculateNakasendoProgress, calculateDistance } from "@/lib/nakasendo";
+import { getLatestWildlifeAlerts, WildlifeAlert } from "@/lib/wildlife";
 
 export default function ElderlyPage() {
   const [status, setStatus] = useState<"resting" | "walking" | "recording" | "praised">("resting");
-  const [isStarting, setIsStarting] = useState(false); // 出陣処理中フラグ
+  const [isStarting, setIsStarting] = useState(false);
   const [currentActivityId, setCurrentActivityId] = useState<string | null>(null);
   const [messages, setMessages] = useState<SamuraiMessage[]>([]);
   const [activeSamurai, setActiveSamurai] = useState(0);
   const [userRank, setUserRank] = useState({ rank: "門下生", totalSteps: 0, nextRankSteps: 5000 });
-  const [goalKm, setGoalKm] = useState(1); // デフォルト1km
+  const [goalKm, setGoalKm] = useState(1);
   const [isOnline, setIsOnline] = useState(true);
+  const [alerts, setAlerts] = useState<WildlifeAlert[]>([]);
   
   const { path, startTracking, stopTracking, setPath } = useTracking();
   const { volume, startRecording, stopRecording } = useVoiceAnalysis();
 
-  // 正確な総移動距離(km)を計算
   const currentDistance = useMemo(() => calculateTotalPathDistance(path), [path]);
-  
-  // 中山道の宿場町進捗
   const progress = useMemo(() => calculateNakasendoProgress(currentDistance), [currentDistance]);
-  
-  // 歩数は距離ベース（1km = 1500歩）で表示
   const currentSteps = useMemo(() => Math.floor(currentDistance * 1500), [currentDistance]);
+
+  // 接近検知（現在地がアラートの半径 + 200m以内に入ったら警告）
+  const isNearDanger = useMemo(() => {
+    if (path.length === 0 || alerts.length === 0) return false;
+    const currentLoc = path[path.length - 1];
+    return alerts.some(alert => {
+      const distKm = calculateDistance(currentLoc.lat, currentLoc.lng, alert.lat, alert.lng);
+      const dangerZoneKm = (alert.radius + 200) / 1000;
+      return distKm < dangerZoneKm;
+    });
+  }, [path, alerts]);
 
   useEffect(() => {
     const savedStatus = localStorage.getItem("samurai_status");
@@ -48,14 +56,16 @@ export default function ElderlyPage() {
         const params = new URLSearchParams(window.location.search);
         const username = params.get("user") || "不明な侍";
 
-        const [msgData, count, rankInfo] = await Promise.all([
+        const [msgData, count, rankInfo, alertData] = await Promise.all([
           getLatestMessages().catch(() => []),
           getActiveSamuraiCount().catch(() => 0),
-          getUserSamuraiRank(username).catch(() => ({ rank: "門下生", totalSteps: 0, nextRankSteps: 5000 }))
+          getUserSamuraiRank(username).catch(() => ({ rank: "門下生", totalSteps: 0, nextRankSteps: 5000 })),
+          getLatestWildlifeAlerts().catch(() => [])
         ]);
         setMessages(msgData);
         setActiveSamurai(count);
         setUserRank(rankInfo);
+        setAlerts(alertData);
       } catch (err) {
         console.error("データ取得失敗:", err);
       }
@@ -194,7 +204,7 @@ export default function ElderlyPage() {
               {/* 1. 侍の称号（累計実績） */}
               <div className="bg-samurai-gold/10 border-2 border-samurai-gold/30 p-4 rounded-[32px]">
                 <p className="text-xs text-samurai-gold font-bold uppercase tracking-tighter mb-1">現在の階級</p>
-                <h2 className="text-3xl font-black text-samurai-gold">{userRank.rank}</h2>
+                <h2 className="text-3xl font-black text-samurai-gold font-samurai">{userRank.rank}</h2>
                 <div className="mt-2 bg-black/40 rounded-full h-2 w-full overflow-hidden border border-samurai-gold/20">
                   <div 
                     className="h-full bg-samurai-gold shadow-[0_0_10px_rgba(255,215,0,0.5)] transition-all duration-1000" 
@@ -242,6 +252,19 @@ export default function ElderlyPage() {
 
           {status === "walking" && (
             <motion.div key="walking" className="text-center w-full">
+              {isNearDanger && (
+                <motion.div 
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-red-600 text-white p-4 rounded-[32px] mb-6 shadow-2xl flex items-center justify-center gap-4 animate-pulse border-4 border-red-800"
+                >
+                  <AlertTriangle size={40} className="text-samurai-gold" />
+                  <div className="text-left">
+                    <p className="font-black text-2xl leading-none tracking-widest uppercase">危険接近</p>
+                    <p className="text-sm font-bold mt-1">野生動物の出没エリアに近づいています</p>
+                  </div>
+                </motion.div>
+              )}
               <div className="relative inline-block mb-4">
                 <Footprints className="w-48 h-48 text-samurai-green animate-bounce" />
                 <div className="absolute -top-4 -right-4 bg-samurai-red text-white px-6 py-2 rounded-full text-2xl font-black shadow-lg">
@@ -292,7 +315,7 @@ export default function ElderlyPage() {
           {status === "praised" && (
             <div className="text-center">
               <Award className="w-48 h-48 text-samurai-gold mx-auto mb-6" />
-              <h2 className="text-elderly-xl font-black text-samurai-gold">実に見事なり！</h2>
+              <h2 className="text-elderly-xl font-black text-samurai-gold font-samurai">実に見事なり！</h2>
               <button onClick={() => setStatus("resting")} className="mt-12 bg-samurai-white text-samurai-black px-12 py-4 rounded-full text-elderly-base font-bold shadow-xl">家で休む</button>
             </div>
           )}
@@ -303,11 +326,11 @@ export default function ElderlyPage() {
         <div className="w-full pb-8">
           {status === "resting" ? (
             <button onClick={handleStart} className="w-full bg-samurai-gold text-samurai-black py-10 rounded-3xl shadow-2xl active:scale-95 transition-transform">
-              <span className="text-elderly-xl font-black">いざ、出陣！</span>
+              <span className="text-elderly-xl font-black font-samurai">いざ、出陣！</span>
             </button>
           ) : (
             <button onClick={handleEnd} className="w-full bg-samurai-white text-samurai-black py-10 rounded-3xl shadow-2xl border-8 border-samurai-green active:scale-95 transition-transform">
-              <span className="text-elderly-xl font-black">無事に帰還</span>
+              <span className="text-elderly-xl font-black font-samurai">無事に帰還</span>
             </button>
           )}
         </div>

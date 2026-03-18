@@ -6,6 +6,7 @@ import MapView from "@/components/MapView";
 import { supabase } from "@/lib/supabase";
 import { getNearestGoalName } from "@/lib/nakasendo";
 import { getAddressFromCoords } from "@/lib/location";
+import { getLatestWildlifeAlerts, WildlifeAlert } from "@/lib/wildlife";
 
 interface ActivityData {
   id: string;
@@ -24,6 +25,7 @@ interface ChartData {
 export default function FamilyDashboard() {
   const [activities, setActivities] = useState<ActivityData[]>([]);
   const [chartActivities, setChartActivities] = useState<ChartData[]>([]);
+  const [alerts, setAlerts] = useState<WildlifeAlert[]>([]);
   const [address, setAddress] = useState<string>("位置情報を確認中...");
   const [loading, setLoading] = useState(true);
 
@@ -35,13 +37,18 @@ export default function FamilyDashboard() {
 
   const fetchActivities = async () => {
     try {
-      const { data, error } = await supabase
-        .from("activities")
-        .select("*")
-        .order("start_time", { ascending: false })
-        .limit(100);
+      const [activityRes, alertRes] = await Promise.all([
+        supabase
+          .from("activities")
+          .select("*")
+          .order("start_time", { ascending: false })
+          .limit(100),
+        getLatestWildlifeAlerts()
+      ]);
 
+      const { data, error } = activityRes;
       if (error) throw error;
+      setAlerts(alertRes);
 
       if (data) {
         const now = new Date();
@@ -229,7 +236,7 @@ export default function FamilyDashboard() {
         <h2 className="text-lg font-bold mb-4 px-2 flex items-center gap-2">
           <MapPin className="text-samurai-gold" size={20} /> 今の足跡
         </h2>
-        <MapView path={latest?.path || []} />
+        <MapView path={latest?.path || []} alerts={alerts} />
       </section>
 
       <div className="fixed bottom-6 left-6 right-6">

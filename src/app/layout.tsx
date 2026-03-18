@@ -1,8 +1,9 @@
 import type { Metadata, Viewport } from "next";
-import { Noto_Sans_JP } from "next/font/google";
+import { Noto_Sans_JP, Yuji_Syuku } from "next/font/google";
 import "./globals.css";
 
-const noto = Noto_Sans_JP({ subsets: ["latin"], weight: ["400", "700", "900"] });
+const noto = Noto_Sans_JP({ subsets: ["latin"], weight: ["400", "700", "900"], variable: "--font-noto" });
+const yuji = Yuji_Syuku({ subsets: ["latin"], weight: ["400"], variable: "--font-yuji" });
 
 export const metadata: Metadata = {
   title: "安中・侍の足跡",
@@ -29,8 +30,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ja">
-      <body className={noto.className}>{children}</body>
+    <html lang="ja" className={`${noto.variable} ${yuji.variable}`}>
+      <body className="font-sans">{children}</body>
     </html>
   );
 }

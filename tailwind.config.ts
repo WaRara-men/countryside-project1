@@ -8,6 +8,10 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["var(--font-noto)", "sans-serif"],
+        samurai: ["var(--font-yuji)", "serif"],
+      },
       colors: {
         "samurai-black": "#1a1a1a",
         "samurai-red": "#d93025",
