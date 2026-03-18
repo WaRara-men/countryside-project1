@@ -16,6 +16,7 @@ interface ActivityData {
 
 export default function FamilyDashboard() {
   const [activities, setActivities] = useState<ActivityData[]>([]);
+  const [chartActivities, setChartActivities] = useState<{date: string, score: number}[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchActivities = async () => {
@@ -23,20 +24,47 @@ export default function FamilyDashboard() {
       .from("activities")
       .select("*")
       .order("start_time", { ascending: false })
-      .limit(20); // 多めに取得して後でフィルタリング
+      .limit(50); // 集計のために多めに取得
 
     if (data) {
       const now = new Date();
-      const filtered = data.filter((act: ActivityData) => {
-        // 完了しているものは表示
+      
+      // 1. タイムライン用のフィルタリング
+      // - 完了しているものはすべて保持
+      // - 未完了（修行中）は最新の1つだけで、かつ開始から1時間以内のみ
+      let activeFound = false;
+      const timelineData = data.filter((act: ActivityData) => {
         if (act.end_time) return true;
-        
-        // 未完了の場合、開始から10分以内なら「修行中」として表示
-        const startTime = new Date(act.start_time);
-        const diffMinutes = (now.getTime() - startTime.getTime()) / (1000 * 60);
-        return diffMinutes < 10;
+        if (!activeFound) {
+          const startTime = new Date(act.start_time);
+          const diffHours = (now.getTime() - startTime.getTime()) / (1000 * 60 * 60);
+          if (diffHours < 1) {
+            activeFound = true;
+            return true;
+          }
+        }
+        return false;
       });
-      setActivities(filtered.slice(0, 7)); // 有効な最新7件を表示
+
+      // 2. グラフ用の集計（日ごとにまとめる）
+      const dailyStats: { [key: string]: { score: number, count: number, date: string } } = {};
+      data.filter(act => act.end_time).forEach(act => {
+        const dateStr = new Date(act.start_time).toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" });
+        if (!dailyStats[dateStr]) {
+          dailyStats[dateStr] = { score: 0, count: 0, date: dateStr };
+        }
+        dailyStats[dateStr].score += act.voice_score;
+        dailyStats[dateStr].count += 1;
+      });
+
+      const chartData = Object.values(dailyStats).map(day => ({
+        date: day.date,
+        score: Math.round(day.score / day.count),
+        id: day.date
+      })).slice(-7); // 直近7日分
+
+      setActivities(timelineData.slice(0, 10)); // タイムラインには最新10件
+      setChartActivities(chartData); // グラフ専用のステート
     }
     setLoading(false);
   };
@@ -142,17 +170,20 @@ export default function FamilyDashboard() {
           <TrendingUp className="text-red-500" size={18} /> 元気の変化（1週間）
         </h2>
         <div className="flex items-end justify-between h-32 gap-2">
-          {activities.slice().reverse().map((act, i) => (
-            <div key={act.id} className="flex-1 flex flex-col items-center gap-2">
+          {chartActivities.map((day, i) => (
+            <div key={day.date} className="flex-1 flex flex-col items-center gap-2">
               <div 
-                className={`w-full rounded-t-lg transition-all duration-1000 ${i === activities.length - 1 ? 'bg-samurai-green' : 'bg-gray-100'}`}
-                style={{ height: `${act.voice_score || 10}%` }}
+                className={`w-full rounded-t-lg transition-all duration-1000 ${i === chartActivities.length - 1 ? 'bg-samurai-green' : 'bg-gray-100'}`}
+                style={{ height: `${day.score || 10}%` }}
               ></div>
               <span className="text-[10px] font-bold text-gray-400">
-                {new Date(act.start_time).toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" })}
+                {day.date}
               </span>
             </div>
           ))}
+          {chartActivities.length === 0 && (
+            <div className="w-full text-center text-gray-300 text-xs pb-4">データ蓄積中...</div>
+          )}
         </div>
       </section>
 
