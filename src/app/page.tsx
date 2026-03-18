@@ -5,18 +5,34 @@ import { ShieldAlert, Footprints, Home, Mic, Award } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTracking } from "@/hooks/useTracking";
 import { supabase } from "@/lib/supabase";
-import { useVoiceAnalysis } from "@/hooks/useVoiceAnalysis"; // 追加
+import { useVoiceAnalysis } from "@/hooks/useVoiceAnalysis";
+import { supabase } from "@/lib/supabase";
+import { getLatestMessages, SamuraiMessage, markAsRead } from "@/lib/messages"; // 追加
 
 export default function ElderlyPage() {
   const [status, setStatus] = useState<"resting" | "walking" | "recording" | "praised">("resting");
+  const [messages, setMessages] = useState<SamuraiMessage[]>([]); // 家族からの手紙
   const { path, startTracking, stopTracking } = useTracking();
-  const { volume, startRecording, stopRecording } = useVoiceAnalysis(); // 追加
+  const { volume, startRecording, stopRecording } = useVoiceAnalysis();
 
-  const handleStart = () => {
+  // 家族からのメッセージを読み込む
+  useEffect(() => {
+    const fetchMessages = async () => {
+      const data = await getLatestMessages();
+      setMessages(data);
+    };
+    fetchMessages();
+  }, [status]);
+
+  const handleStart = async () => {
+    // 読んだメッセージを既読にする
+    for (const msg of messages) {
+      await markAsRead(msg.id);
+    }
+    setMessages([]);
     setStatus("walking");
     startTracking();
   };
-
   const handleEnd = async () => {
     const finalPath = stopTracking();
     setStatus("recording");
@@ -65,7 +81,24 @@ export default function ElderlyPage() {
       <div className="flex-1 flex flex-col items-center justify-center gap-8 w-full">
         <AnimatePresence mode="wait">
           {status === "resting" && (
-            <motion.div key="resting" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="text-center">
+            <motion.div key="resting" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="text-center w-full px-4">
+              
+              {/* 家族からの最新の手紙（吹き出し演出） */}
+              {messages.length > 0 && (
+                <motion.div 
+                  initial={{ scale: 0.8, rotate: -2 }}
+                  animate={{ scale: 1, rotate: 1 }}
+                  className="bg-samurai-gold text-samurai-black p-6 rounded-[40px] rounded-bl-none mb-10 shadow-xl relative"
+                >
+                  <p className="text-elderly-base font-black leading-tight">
+                    「{messages[0].content}」
+                  </p>
+                  <p className="text-sm mt-2 text-right opacity-80">— {messages[0].sender_name}より</p>
+                  {/* 吹き出しのしっぽ */}
+                  <div className="absolute -bottom-4 left-0 w-8 h-8 bg-samurai-gold clip-path-triangle" style={{ clipPath: 'polygon(0 0, 0% 100%, 100% 0)' }}></div>
+                </motion.div>
+              )}
+
               <div className="bg-samurai-gold/10 p-8 rounded-full mb-4 inline-block">
                 <Home className="w-32 h-32 text-samurai-gold" />
               </div>
@@ -74,15 +107,35 @@ export default function ElderlyPage() {
           )}
 
           {status === "walking" && (
-            <motion.div key="walking" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="text-center">
-              <div className="relative inline-block">
-                <Footprints className="w-40 h-40 text-samurai-green animate-bounce" />
-                <div className="absolute -top-4 -right-4 bg-samurai-green text-white px-4 py-2 rounded-full text-xl font-bold">
-                  修行中
+            <motion.div key="walking" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="text-center w-full">
+              <div className="relative inline-block mb-4">
+                {/* 侍の行軍アニメーション */}
+                <motion.div
+                  animate={{ x: [-10, 10, -10] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                >
+                  <Footprints className="w-48 h-48 text-samurai-green" />
+                </motion.div>
+                <div className="absolute -top-4 -right-4 bg-samurai-red text-white px-6 py-2 rounded-full text-2xl font-black shadow-lg">
+                  {path.length * 0.01 < 1 ? "足軽" : path.length * 0.01 < 3 ? "侍" : "将軍"}
                 </div>
               </div>
-              <p className="text-elderly-xl font-black mt-4">{path.length} 地点通過</p>
-              <p className="text-elderly-base text-gray-400">安中の道を刻んでいます...</p>
+              
+              <div className="bg-white/5 rounded-[40px] p-8 backdrop-blur-sm border border-white/10">
+                <p className="text-elderly-base text-samurai-gold font-bold mb-2">現在の修行距離</p>
+                <p className="text-[5rem] font-black leading-none mb-2">
+                  {(path.length * 0.01).toFixed(2)} <span className="text-elderly-lg">km</span>
+                </p>
+                <div className="w-full bg-gray-800 h-4 rounded-full mt-4 overflow-hidden">
+                  {/* 1万歩(約7km)をゴールとした進捗バー */}
+                  <motion.div 
+                    className="h-full bg-samurai-green"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${Math.min(100, (path.length * 0.01 / 7) * 100)}%` }}
+                  />
+                </div>
+                <p className="text-sm text-gray-400 mt-4">安中宿から松井田宿へ向けて進軍中...</p>
+              </div>
             </motion.div>
           )}
 
