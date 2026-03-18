@@ -11,67 +11,84 @@ import { getActiveSamuraiCount } from "@/lib/activities";
 
 export default function ElderlyPage() {
   const [status, setStatus] = useState<"resting" | "walking" | "recording" | "praised">("resting");
+  const [currentActivityId, setCurrentActivityId] = useState<string | null>(null); // 追加
   const [messages, setMessages] = useState<SamuraiMessage[]>([]);
-  const [activeSamurai, setActiveSamurai] = useState(0); // 修行中の仲間
-  const [goalKm, setGoalKm] = useState(3); // デフォルト目標: 3km
+  const [activeSamurai, setActiveSamurai] = useState(0);
+  const [goalKm, setGoalKm] = useState(3);
   const { path, startTracking, stopTracking } = useTracking();
   const { volume, startRecording, stopRecording } = useVoiceAnalysis();
 
-  // 家族からのメッセージと仲間の数を読み込む
+  // 位置情報が変わるたびにSupabaseへ送信（リアルタイム追跡）
   useEffect(() => {
-    const fetchData = async () => {
-      const msgData = await getLatestMessages();
-      setMessages(msgData);
-      const count = await getActiveSamuraiCount();
-      setActiveSamurai(count);
-    };
-    fetchData();
-    
-    // 30秒ごとに仲間の数を更新
-    const interval = setInterval(fetchData, 30000);
-    return () => clearInterval(interval);
-  }, [status]);
+    if (status === "walking" && currentActivityId && path.length > 0) {
+      const updatePath = async () => {
+        await supabase
+          .from("activities")
+          .update({ 
+            path: path,
+            distance: path.length * 0.01 
+          })
+          .eq("id", currentActivityId);
+      };
+      updatePath();
+    }
+  }, [path, status, currentActivityId]);
 
   const handleStart = async () => {
-    // 読んだメッセージを既読にする（復元）
+    // 家族からのメッセージ既読化
     for (const msg of messages) {
       await markAsRead(msg.id);
     }
     setMessages([]);
-    setStatus("walking");
-    startTracking();
+
+    // 1. 修行レコードを「開始」状態で新規作成
+    const { data, error } = await supabase
+      .from("activities")
+      .insert([{ 
+        start_time: new Date().toISOString(),
+        path: [],
+        distance: 0
+      }])
+      .select()
+      .single();
+
+    if (data) {
+      setCurrentActivityId(data.id);
+      setStatus("walking");
+      startTracking();
+    }
   };
 
   const handleEnd = async () => {
     const finalPath = stopTracking();
     setStatus("recording");
-    
-    // 実際にマイクを起動して録音・解析開始
     await startRecording();
 
-    // 5秒後に自動で録音を終了してデータを保存
     setTimeout(async () => {
       const peakVolume = stopRecording();
-      
-      // 最大音量に基づいた「元気度スコア」を算出
       const score = Math.min(100, Math.max(60, Math.floor(peakVolume * 1.5)));
 
-      // Supabaseへデータを保存
-      try {
-        const { error: insertError } = await supabase.from("activities").insert([
-          {
-            path: finalPath,
-            voice_score: score,
-            distance: finalPath.length * 0.01,
-            is_warning: score < 70,
-          },
-        ]);
-        if (insertError) throw insertError;
-      } catch (err) {
-        console.error("保存失敗:", err);
+      // 2. 既存の修行レコードを「終了」状態で更新
+      if (currentActivityId) {
+        try {
+          const { error: updateError } = await supabase
+            .from("activities")
+            .update({
+              end_time: new Date().toISOString(),
+              path: finalPath,
+              voice_score: score,
+              distance: finalPath.length * 0.01,
+              is_warning: score < 70,
+            })
+            .eq("id", currentActivityId);
+          if (updateError) throw updateError;
+        } catch (err) {
+          console.error("更新失敗:", err);
+        }
       }
 
       setStatus("praised");
+      setCurrentActivityId(null);
     }, 5000);
   };
 
