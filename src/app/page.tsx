@@ -19,7 +19,7 @@ export default function ElderlyPage() {
   const [activeSamurai, setActiveSamurai] = useState(0);
   const [isOnline, setIsOnline] = useState(true);
   
-  const { path, startTracking, stopTracking } = useTracking();
+  const { path, startTracking, stopTracking, setPath } = useTracking();
   const { volume, startRecording, stopRecording } = useVoiceAnalysis();
 
   // 正確な総移動距離(km)を計算
@@ -81,18 +81,28 @@ export default function ElderlyPage() {
   }, [path, status, currentActivityId]);
 
   const handleStart = async () => {
-    if (isStarting) return; // 既に処理中なら何もしない
+    if (isStarting) return;
     setIsStarting(true);
     
     try {
       const params = new URLSearchParams(window.location.search);
       const username = params.get("user") || "不明な侍";
 
+      // 1. まず現在地を1点取得する（家族画面での「取得中」防止）
+      let initialPath: {lat: number, lng: number}[] = [];
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true });
+      }).catch(() => null);
+
+      if (position) {
+        initialPath = [{ lat: position.coords.latitude, lng: position.coords.longitude }];
+      }
+
       const { data, error } = await supabase
         .from("activities")
         .insert([{ 
           start_time: new Date().toISOString(),
-          path: [],
+          path: initialPath,
           distance: 0,
           username: username
         }])
@@ -104,7 +114,11 @@ export default function ElderlyPage() {
       if (data) {
         setCurrentActivityId(data.id);
         setStatus("walking");
-        startTracking();
+        startTracking(); // 追跡開始
+        if (initialPath.length > 0) {
+          // useTracking内のpathも初期化（家族画面での「取得中」防止）
+          setPath(initialPath);
+        }
         messages.forEach(msg => markAsRead(msg.id).catch(() => {}));
         setMessages([]);
       }
