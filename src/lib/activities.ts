@@ -1,15 +1,21 @@
 import { supabase } from "./supabase";
 
 /**
- * 今まさに修行中（end_timeが空）のユーザー数を取得
+ * 今まさに修行中（直近15分以内に開始され、まだ終了していない）のユーザー数を取得
  */
 export async function getActiveSamuraiCount(): Promise<number> {
+  const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+  
   const { count, error } = await supabase
     .from('activities')
     .select('*', { count: 'exact', head: true })
-    .is('end_time', null);
+    .is('end_time', null)
+    .gt('start_time', fifteenMinutesAgo); // 直近15分以内に開始されたもののみ
 
-  if (error) return 0;
+  if (error) {
+    console.error("仲間カウント取得失敗:", error);
+    return 0;
+  }
   return count || 0;
 }
 
