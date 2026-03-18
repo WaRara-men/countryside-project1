@@ -98,17 +98,31 @@ export default function FamilyDashboard() {
       {/* 2. 【本物のタイムライン】 */}
       <section className="bg-white p-6 rounded-[40px] shadow-sm border border-gray-100 mb-6">
         <h2 className="text-gray-500 font-bold mb-4 flex items-center gap-2 text-sm uppercase">
-          <Clock className="text-blue-500" size={18} /> 本日のリズム（実測）
+          <Clock className="text-blue-500" size={18} /> 最近のリズム（履歴）
         </h2>
-        <div className="relative pl-6 border-l-2 border-dashed border-gray-100 space-y-6">
-          <div className="relative">
-            <div className="absolute -left-[31px] top-1 w-4 h-4 rounded-full bg-blue-500 border-4 border-white shadow-sm"></div>
-            <p className="text-sm font-bold text-gray-800">{formatTime(latest?.start_time)} 出陣</p>
-          </div>
-          <div className="relative">
-            <div className={`absolute -left-[31px] top-1 w-4 h-4 rounded-full ${latest?.end_time ? 'bg-samurai-green' : 'bg-gray-200'} border-4 border-white shadow-sm`}></div>
-            <p className="text-sm font-bold text-gray-800">{formatTime(latest?.end_time)} 帰還</p>
-          </div>
+        <div className="space-y-8">
+          {activities.map((act, index) => (
+            <div key={act.id} className="relative pl-6 border-l-2 border-dashed border-gray-100">
+              <div className="absolute -left-[9px] -top-2 bg-white py-1">
+                <span className="text-[10px] font-black text-gray-300 uppercase">
+                  {new Date(act.start_time).toLocaleDateString("ja-JP", { month: "short", day: "numeric" })}
+                </span>
+              </div>
+              <div className="space-y-4 pt-4">
+                <div className="relative">
+                  <div className="absolute -left-[31px] top-1 w-4 h-4 rounded-full bg-blue-500 border-4 border-white shadow-sm"></div>
+                  <p className="text-sm font-bold text-gray-800">{formatTime(act.start_time)} 出陣</p>
+                </div>
+                <div className="relative">
+                  <div className={`absolute -left-[31px] top-1 w-4 h-4 rounded-full ${act.end_time ? 'bg-samurai-green' : 'bg-gray-200'} border-4 border-white shadow-sm`}></div>
+                  <p className="text-sm font-bold text-gray-800">
+                    {act.end_time ? `${formatTime(act.end_time)} 帰還` : '修行中...'}
+                    {act.voice_score > 0 && <span className="ml-2 text-xs text-samurai-gold">元気度: {act.voice_score}</span>}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -125,7 +139,7 @@ export default function FamilyDashboard() {
                 style={{ height: `${act.voice_score || 10}%` }}
               ></div>
               <span className="text-[10px] font-bold text-gray-400">
-                {new Date(act.start_time).getDate()}日
+                {new Date(act.start_time).toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" })}
               </span>
             </div>
           ))}
