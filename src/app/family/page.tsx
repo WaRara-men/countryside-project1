@@ -14,9 +14,14 @@ interface ActivityData {
   path: { lat: number; lng: number }[];
 }
 
+interface ChartData {
+  date: string;
+  score: number;
+}
+
 export default function FamilyDashboard() {
   const [activities, setActivities] = useState<ActivityData[]>([]);
-  const [chartActivities, setChartActivities] = useState<{date: string, score: number}[]>([]);
+  const [chartActivities, setChartActivities] = useState<ChartData[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchActivities = async () => {
@@ -24,21 +29,19 @@ export default function FamilyDashboard() {
       .from("activities")
       .select("*")
       .order("start_time", { ascending: false })
-      .limit(50); // 集計のために多めに取得
+      .limit(100);
 
     if (data) {
       const now = new Date();
       
-      // 1. タイムライン用のフィルタリング
-      // - 完了しているものはすべて保持
-      // - 未完了（修行中）は最新の1つだけで、かつ開始から1時間以内のみ
+      // 1. タイムライン用
       let activeFound = false;
       const timelineData = data.filter((act: ActivityData) => {
         if (act.end_time) return true;
         if (!activeFound) {
           const startTime = new Date(act.start_time);
           const diffHours = (now.getTime() - startTime.getTime()) / (1000 * 60 * 60);
-          if (diffHours < 1) {
+          if (diffHours < 2) { // 2時間以内なら表示
             activeFound = true;
             return true;
           }
@@ -46,64 +49,56 @@ export default function FamilyDashboard() {
         return false;
       });
 
-      // 2. グラフ用の集計（日ごとにまとめる）
-      const dailyStats: { [key: string]: { score: number, count: number, date: string } } = {};
-      data.filter(act => act.end_time).forEach(act => {
-        const dateStr = new Date(act.start_time).toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" });
-        if (!dailyStats[dateStr]) {
-          dailyStats[dateStr] = { score: 0, count: 0, date: dateStr };
+      // 2. グラフ用（直近7日分の枠を確実に作る）
+      const dailyStats: { [key: string]: { total: number, count: number } } = {};
+      data.forEach(act => {
+        if (act.voice_score > 0) {
+          const d = new Date(act.start_time);
+          const key = `${d.getMonth() + 1}/${d.getDate()}`;
+          if (!dailyStats[key]) dailyStats[key] = { total: 0, count: 0 };
+          dailyStats[key].total += act.voice_score;
+          dailyStats[key].count += 1;
         }
-        dailyStats[dateStr].score += act.voice_score;
-        dailyStats[dateStr].count += 1;
       });
 
-      const chartData = Object.values(dailyStats).map(day => ({
-        date: day.date,
-        score: Math.round(day.score / day.count),
-        id: day.date
-      })).slice(-7); // 直近7日分
+      const last7Days: ChartData[] = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const key = `${d.getMonth() + 1}/${d.getDate()}`;
+        last7Days.push({
+          date: key,
+          score: dailyStats[key] ? Math.round(dailyStats[key].total / dailyStats[key].count) : 0
+        });
+      }
 
-      setActivities(timelineData.slice(0, 10)); // タイムラインには最新10件
-      setChartActivities(chartData); // グラフ専用のステート
+      setActivities(timelineData.slice(0, 15));
+      setChartActivities(last7Days);
     }
     setLoading(false);
   };
 
   useEffect(() => {
     fetchActivities();
-
     const channel = supabase
       .channel("family-realtime")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "activities" },
-        () => {
-          fetchActivities();
-        }
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "activities" }, () => fetchActivities())
       .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   if (loading) return <div className="min-h-screen flex items-center justify-center font-bold">状況を確認中...</div>;
 
-  const latest = activities[0];
+  const latest = activities.find(a => a.end_time) || activities[0];
   const formatTime = (isoString: string | null) => {
     if (!isoString) return "--:--";
     const date = new Date(isoString);
-    return date.toLocaleTimeString("ja-JP", { 
-      hour: "2-digit", 
-      minute: "2-digit",
-      hour12: false 
-    });
+    return date.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", hour12: false });
   };
 
   return (
     <main className="min-h-screen bg-gray-50 p-4 pb-24 font-sans max-w-lg mx-auto">
-      {/* 1. 現在のステータス */}
+      {/* 1. ステータス */}
       <header className="mb-6 bg-white p-6 rounded-[40px] shadow-sm border border-gray-100">
         <div className="flex justify-between items-start mb-4">
           <div>
@@ -133,61 +128,69 @@ export default function FamilyDashboard() {
         </div>
       </header>
 
-      {/* 2. 【本物のタイムライン】 */}
+      {/* 2. タイムライン */}
       <section className="bg-white p-6 rounded-[40px] shadow-sm border border-gray-100 mb-6">
-        <h2 className="text-gray-500 font-bold mb-4 flex items-center gap-2 text-sm uppercase">
-          <Clock className="text-blue-500" size={18} /> 最近のリズム（履歴）
+        <h2 className="text-gray-500 font-bold mb-6 flex items-center gap-2 text-sm uppercase">
+          <Clock className="text-blue-500" size={18} /> 最近の修行履歴
         </h2>
-        <div className="space-y-8">
-          {activities.map((act, index) => (
-            <div key={act.id} className="relative pl-6 border-l-2 border-dashed border-gray-100">
-              <div className="absolute -left-[9px] -top-2 bg-white py-1">
-                <span className="text-[10px] font-black text-gray-300 uppercase">
-                  {new Date(act.start_time).toLocaleDateString("ja-JP", { month: "short", day: "numeric" })}
-                </span>
-              </div>
-              <div className="space-y-4 pt-4">
-                <div className="relative">
-                  <div className="absolute -left-[31px] top-1 w-4 h-4 rounded-full bg-blue-500 border-4 border-white shadow-sm"></div>
-                  <p className="text-sm font-bold text-gray-800">{formatTime(act.start_time)} 出陣</p>
+        <div className="space-y-10">
+          {activities.length === 0 && <p className="text-gray-300 text-xs text-center py-4">まだ履歴がありません</p>}
+          {activities.map((act, index) => {
+            const showDate = index === 0 || 
+              new Date(act.start_time).toDateString() !== new Date(activities[index-1].start_time).toDateString();
+            
+            return (
+              <div key={act.id} className="relative">
+                {showDate && (
+                  <div className="mb-4 flex items-center gap-2">
+                    <span className="bg-gray-100 text-gray-500 text-[10px] font-black px-3 py-1 rounded-full uppercase">
+                      {new Date(act.start_time).toLocaleDateString("ja-JP", { month: "short", day: "numeric", weekday: "short" })}
+                    </span>
+                    <div className="flex-1 h-px bg-gray-50"></div>
+                  </div>
+                )}
+                <div className="pl-6 border-l-2 border-gray-50 space-y-4 ml-4">
+                  <div className="relative">
+                    <div className="absolute -left-[33px] top-1 w-4 h-4 rounded-full bg-blue-500 border-4 border-white shadow-sm"></div>
+                    <p className="text-sm font-bold text-gray-800">{formatTime(act.start_time)} 出陣</p>
+                  </div>
+                  <div className="relative">
+                    <div className={`absolute -left-[33px] top-1 w-4 h-4 rounded-full ${act.end_time ? 'bg-samurai-green' : 'bg-gray-200'} border-4 border-white shadow-sm`}></div>
+                    <p className="text-sm font-bold text-gray-800">
+                      {act.end_time ? `${formatTime(act.end_time)} 帰還` : '修行中...'}
+                      {act.voice_score > 0 && <span className="ml-2 text-xs text-samurai-gold font-black">元気 {act.voice_score}</span>}
+                    </p>
+                  </div>
                 </div>
-                <div className="relative">
-                  <div className={`absolute -left-[31px] top-1 w-4 h-4 rounded-full ${act.end_time ? 'bg-samurai-green' : 'bg-gray-200'} border-4 border-white shadow-sm`}></div>
-                  <p className="text-sm font-bold text-gray-800">
-                    {act.end_time ? `${formatTime(act.end_time)} 帰還` : '修行中...'}
-                    {act.voice_score > 0 && <span className="ml-2 text-xs text-samurai-gold">元気度: {act.voice_score}</span>}
-                  </p>
-                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
-      {/* 3. 【復元】元気の変化（グラフ） */}
+      {/* 3. グラフ */}
       <section className="bg-white p-6 rounded-[40px] shadow-sm border border-gray-100 mb-6">
         <h2 className="text-gray-500 font-bold mb-4 flex items-center gap-2 text-sm uppercase">
           <TrendingUp className="text-red-500" size={18} /> 元気の変化（1週間）
         </h2>
-        <div className="flex items-end justify-between h-32 gap-2">
+        <div className="flex items-end justify-between h-32 gap-3 px-2 pt-4">
           {chartActivities.map((day, i) => (
             <div key={day.date} className="flex-1 flex flex-col items-center gap-2">
-              <div 
-                className={`w-full rounded-t-lg transition-all duration-1000 ${i === chartActivities.length - 1 ? 'bg-samurai-green' : 'bg-gray-100'}`}
-                style={{ height: `${day.score || 10}%` }}
-              ></div>
+              <div className="relative w-full flex flex-col justify-end h-24 bg-gray-50/50 rounded-t-lg">
+                <div 
+                  className={`w-full rounded-t-lg transition-all duration-1000 ${i === chartActivities.length - 1 ? 'bg-samurai-green' : 'bg-gray-200'}`}
+                  style={{ height: `${day.score > 0 ? day.score : 5}%` }}
+                ></div>
+              </div>
               <span className="text-[10px] font-bold text-gray-400">
                 {day.date}
               </span>
             </div>
           ))}
-          {chartActivities.length === 0 && (
-            <div className="w-full text-center text-gray-300 text-xs pb-4">データ蓄積中...</div>
-          )}
         </div>
       </section>
 
-      {/* 4. 地図（リアルタイム軌跡） */}
+      {/* 4. 地図 */}
       <section className="bg-white p-4 rounded-[40px] shadow-lg mb-6">
         <h2 className="text-lg font-bold mb-4 px-2 flex items-center gap-2">
           <MapPin className="text-samurai-gold" size={20} /> 今の足跡
