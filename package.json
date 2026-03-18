@@ -25,10 +25,10 @@
     "jest-environment-jsdom": "^29.7.0",
     "@testing-library/react": "^14.2.1",
     "@testing-library/jest-dom": "^6.4.2",
-    "typescript": "^5.3.3",
+    "typescript": "^5.7.3",
     "@types/node": "^20.11.19",
-    "@types/react": "^18.2.57",
-    "@types/react-dom": "^18.2.19",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
     "autoprefixer": "^10.4.17"
