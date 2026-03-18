@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ShieldAlert, Footprints, Home, Mic, Award } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTracking } from "@/hooks/useTracking";
+import { supabase } from "@/lib/supabase"; // 追加
 
 export default function ElderlyPage() {
   const [status, setStatus] = useState<"resting" | "walking" | "recording" | "praised">("resting");
@@ -14,10 +15,30 @@ export default function ElderlyPage() {
     startTracking();
   };
 
-  const handleEnd = () => {
-    stopTracking();
+  const handleEnd = async () => {
+    const finalPath = stopTracking();
     setStatus("recording");
-    // 帰り際の「ただいま」ボイス録音（シミュレーション）
+
+    // 1. 疑似的な元気度スコアを算出（本来は音声解析結果）
+    const score = Math.floor(Math.random() * 21) + 75; // 75-95点
+
+    // 2. Supabaseへデータを保存
+    try {
+      const { error } = await supabase.from("activities").insert([
+        {
+          path: finalPath,
+          voice_score: score,
+          distance: finalPath.length * 0.01, // 簡易的な距離計算
+          is_warning: score < 70,
+        },
+      ]);
+      if (error) throw error;
+      console.log("修行の成果を家族に届けました！");
+    } catch (err) {
+      console.error("保存失敗:", err);
+    }
+
+    // 録音後の「称賛」画面へ
     setTimeout(() => {
       setStatus("praised");
     }, 4000);

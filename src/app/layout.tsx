@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
+import { Noto_Sans_JP } from "next/font/google"; // 追加
 import "./globals.css";
+
+const noto = Noto_Sans_JP({ subsets: ["latin"], weight: ["400", "700", "900"] }); // 追加
 
 export const metadata: Metadata = {
   title: "安中・侍の足跡",
@@ -13,7 +16,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ja">
-      <body>{children}</body>
+      <body className={noto.className}>{children}</body>
     </html>
   );
 }

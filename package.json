@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "jest"
   },
   "dependencies": {
     "next": "14.1.0",
@@ -20,6 +21,10 @@
     "tailwind-merge": "^2.2.1"
   },
   "devDependencies": {
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "@testing-library/react": "^14.2.1",
+    "@testing-library/jest-dom": "^6.4.2",
     "typescript": "^5.3.3",
     "@types/node": "^20.11.19",
     "@types/react": "^18.2.57",

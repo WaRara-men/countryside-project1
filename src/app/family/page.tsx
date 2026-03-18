@@ -1,15 +1,54 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Heart, Activity, TrendingUp, HeartPulse, MapPin, Calendar } from "lucide-react";
 import MapView from "@/components/MapView";
-
-const dummyPath = [
-  { lat: 36.3274, lng: 138.8893 },
-  { lat: 36.3312, lng: 138.8755 },
-  { lat: 36.3355, lng: 138.8612 },
-];
+import { supabase } from "@/lib/supabase";
+import { Location } from "@/lib/types";
 
 export default function FamilyDashboard() {
+  const [latestActivity, setLatestActivity] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  // 初回データ取得
+  const fetchLatestActivity = async () => {
+    const { data, error } = await supabase
+      .from("activities")
+      .select("*")
+      .order("start_time", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (data) {
+      setLatestActivity(data);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchLatestActivity();
+
+    // リアルタイム購読（新しい修行データが入ったら自動更新）
+    const channel = supabase
+      .channel("realtime-activities")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "activities" },
+        (payload) => {
+          setLatestActivity(payload.new);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center">修行記録を確認中...</div>;
+  }
+
   return (
     <main className="min-h-screen bg-gray-50 p-6 pb-24 font-sans">
       <header className="mb-8">
@@ -17,7 +56,9 @@ export default function FamilyDashboard() {
           <Heart className="text-red-500 fill-red-500" />
           父さんの修行日誌
         </h1>
-        <p className="text-gray-500">本日：安中市にて活動中</p>
+        <p className="text-gray-500">
+          最終更新：{latestActivity ? new Date(latestActivity.start_time).toLocaleString("ja-JP") : "データなし"}
+        </p>
       </header>
 
       <section className="grid grid-cols-1 gap-6 mb-8">
@@ -27,16 +68,23 @@ export default function FamilyDashboard() {
           </h2>
           <div className="flex justify-between items-end">
             <div>
-              <span className="text-5xl font-black text-gray-900">85</span>
+              <span className="text-5xl font-black text-gray-900">
+                {latestActivity?.voice_score || "--"}
+              </span>
               <span className="text-xl font-bold text-gray-400"> / 100 点</span>
             </div>
             <div className="text-right">
-              <p className="text-green-600 font-bold text-sm">昨日より +5点</p>
-              <p className="text-gray-400 text-xs">声のハリ・歩行ともに安定</p>
+              <p className="text-green-600 font-bold text-sm">修行の成果</p>
+              <p className="text-gray-400 text-xs">
+                {latestActivity?.voice_score >= 80 ? "声にハリがありました" : "いつも通りです"}
+              </p>
             </div>
           </div>
           <div className="mt-6 h-2 w-full bg-gray-100 rounded-full overflow-hidden flex">
-            <div className="h-full bg-samurai-green" style={{ width: '85%' }}></div>
+            <div 
+              className="h-full bg-samurai-green transition-all duration-1000" 
+              style={{ width: `${latestActivity?.voice_score || 0}%` }}
+            ></div>
           </div>
         </div>
 
@@ -45,13 +93,17 @@ export default function FamilyDashboard() {
             <div className="flex items-center gap-2 text-blue-600 mb-2 font-bold text-sm">
               <MapPin size={16} /> 修行距離
             </div>
-            <div className="text-2xl font-black text-gray-900">2.4km</div>
+            <div className="text-2xl font-black text-gray-900">
+              {latestActivity?.distance?.toFixed(1) || "0.0"}km
+            </div>
           </div>
           <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
             <div className="flex items-center gap-2 text-orange-600 mb-2 font-bold text-sm">
-              <Activity size={16} /> 経過時間
+              <Activity size={16} /> 座標点
             </div>
-            <div className="text-2xl font-black text-gray-900">45分</div>
+            <div className="text-2xl font-black text-gray-900">
+              {latestActivity?.path?.length || 0}
+            </div>
           </div>
         </div>
       </section>
@@ -60,11 +112,14 @@ export default function FamilyDashboard() {
         <h2 className="text-lg font-bold mb-4 px-2 flex items-center gap-2">
           <Calendar className="text-samurai-gold" size={20} /> 今日の足跡
         </h2>
-        <MapView path={dummyPath} />
+        <MapView path={latestActivity?.path || []} />
       </section>
 
       <div className="fixed bottom-8 left-6 right-6">
-        <button className="w-full bg-samurai-black text-white py-5 rounded-3xl font-bold shadow-xl active:scale-95 transition-transform flex items-center justify-center gap-3">
+        <button 
+          onClick={() => window.location.href = `tel:0000000000`}
+          className="w-full bg-samurai-black text-white py-5 rounded-3xl font-bold shadow-xl active:scale-95 transition-transform flex items-center justify-center gap-3"
+        >
           父さんに電話をかける
         </button>
       </div>
