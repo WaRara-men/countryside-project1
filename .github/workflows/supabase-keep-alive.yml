@@ -2,8 +2,8 @@ name: Supabase Keep Alive
 
 on:
   schedule:
-    # 3日に1回（UTC 0:00 = 日本時間 9:00）実行
-    - cron: '0 0 */3 * *'
+    # 毎日（UTC 0:00 = 日本時間 9:00）実行
+    - cron: '0 0 * * *'
   workflow_dispatch: # 手動実行も可能に
 
 jobs:
@@ -11,7 +11,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ping Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          curl -X GET "${{ secrets.SUPABASE_URL }}/rest/v1/profiles?select=count" \
-          -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
-          -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}"
+          if [ -z "$SUPABASE_URL" ]; then
+            echo "Error: NEXT_PUBLIC_SUPABASE_URL is not set in GitHub Secrets"
+            exit 1
+          fi
+          
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X GET "${SUPABASE_URL}/rest/v1/wildlife_alerts?select=count" \
+          -H "apikey: ${SUPABASE_KEY}" \
+          -H "Authorization: Bearer ${SUPABASE_KEY}")
+          
+          echo "Supabase Response Status: $STATUS"
+          
+          if [ "$STATUS" -eq 200 ] || [ "$STATUS" -eq 201 ] || [ "$STATUS" -eq 204 ]; then
+            echo "Successfully pinged Supabase"
+          else
+            echo "Failed to ping Supabase (Status: $STATUS)"
+            exit 1
+          fi
