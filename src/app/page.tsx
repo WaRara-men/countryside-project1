@@ -15,6 +15,7 @@ import { getLatestWildlifeAlerts, WildlifeAlert } from "@/lib/wildlife";
 
 export default function ElderlyPage() {
   const router = useRouter();
+  const [isAuthorized, setIsAuthorized] = useState(false);
   const [status, setStatus] = useState<"resting" | "walking" | "recording" | "praised">("resting");
   const [isStarting, setIsStarting] = useState(false);
   const [currentActivityId, setCurrentActivityId] = useState<string | null>(null);
@@ -47,12 +48,13 @@ export default function ElderlyPage() {
     // 認証チェック
     const role = localStorage.getItem("samurai_role");
     if (!role) {
-      router.push("/login");
+      router.replace("/login");
       return;
     } else if (role === "family") {
-      router.push("/family");
+      router.replace("/family");
       return;
     }
+    setIsAuthorized(true);
 
     const savedStatus = localStorage.getItem("samurai_status");
     const savedId = localStorage.getItem("samurai_activity_id");
@@ -83,6 +85,8 @@ export default function ElderlyPage() {
     };
     fetchData();
   }, []);
+
+  if (!isAuthorized) return null; // 認証されるまで何も表示しない
 
   useEffect(() => {
     localStorage.setItem("samurai_status", status);

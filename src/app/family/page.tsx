@@ -26,6 +26,7 @@ interface ChartData {
 
 export default function FamilyDashboard() {
   const router = useRouter();
+  const [isAuthorized, setIsAuthorized] = useState(false);
   const [activities, setActivities] = useState<ActivityData[]>([]);
   const [chartActivities, setChartActivities] = useState<ChartData[]>([]);
   const [alerts, setAlerts] = useState<WildlifeAlert[]>([]);
@@ -111,12 +112,13 @@ export default function FamilyDashboard() {
     const role = localStorage.getItem("samurai_role");
     const username = localStorage.getItem("samurai_username");
     if (!role || !username) {
-      router.push("/login");
+      router.replace("/login");
       return;
     } else if (role === "elderly") {
-      router.push("/");
+      router.replace("/");
       return;
     }
+    setIsAuthorized(true);
 
     fetchActivities();
     const channel = supabase
@@ -130,6 +132,8 @@ export default function FamilyDashboard() {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
+
+  if (!isAuthorized) return null; // 認証されるまで何も表示しない
 
   // latestをuseMemoで計算し、安定させる
   const latest = useMemo(() => {
