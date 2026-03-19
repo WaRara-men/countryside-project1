@@ -35,7 +35,6 @@ export default function FamilyDashboard() {
   const [loading, setLoading] = useState(true);
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
 
-  // 表示する履歴（展開時はすべて、それ以外は最新3件）
   const visibleActivities = useMemo(() => {
     return isHistoryExpanded ? activities : activities.slice(0, 3);
   }, [activities, isHistoryExpanded]);
@@ -52,7 +51,7 @@ export default function FamilyDashboard() {
         supabase
           .from("activities")
           .select("*")
-          .eq("username", uname) // 特定のユーザーで絞り込み
+          .eq("username", uname)
           .order("start_time", { ascending: false })
           .limit(100),
         getLatestWildlifeAlerts()
@@ -108,7 +107,6 @@ export default function FamilyDashboard() {
   };
 
   useEffect(() => {
-    // 認証チェック（ブラウザ上でのみ実行）
     if (typeof window === "undefined") return;
 
     const role = localStorage.getItem("samurai_role");
@@ -138,9 +136,6 @@ export default function FamilyDashboard() {
     return () => { supabase.removeChannel(channel); };
   }, [router]);
 
-  if (!isAuthorized) return null; // 認証されるまで何も表示しない
-
-  // latestをuseMemoで計算し、安定させる
   const latest = useMemo(() => {
     if (activities.length === 0) return null;
     return activities.find(a => a.end_time) || activities[0];
@@ -165,13 +160,13 @@ export default function FamilyDashboard() {
     return () => { isMounted = false; };
   }, [latest?.id, latest?.path?.length]);
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center font-bold">状況を確認中...</div>;
-
   const formatTime = (isoString: string | null) => {
     const d = safeDate(isoString);
     if (!d) return "--:--";
     return d.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", hour12: false });
   };
+
+  if (!isAuthorized) return null;
 
   return (
     <main className="min-h-screen bg-gray-50 p-4 pb-24 font-sans max-w-lg mx-auto">
@@ -209,96 +204,102 @@ export default function FamilyDashboard() {
         </div>
       </header>
 
-      <section className="bg-white p-6 rounded-[40px] shadow-sm border border-gray-100 mb-6">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-gray-500 font-bold flex items-center gap-2 text-sm uppercase">
-            <Clock className="text-blue-500" size={18} /> 最近の修行履歴
-          </h2>
-        </div>
-        
-        <div className="space-y-10 relative">
-          {activities.length === 0 && <p className="text-gray-300 text-xs text-center py-4">まだ履歴がありません</p>}
-          
-          <AnimatePresence initial={false}>
-            {visibleActivities.map((act, index) => {
-              const actDate = safeDate(act.start_time);
-              const prevDate = index > 0 ? safeDate(visibleActivities[index-1].start_time) : null;
-              const showDate = index === 0 || (actDate && prevDate && actDate.toDateString() !== prevDate.toDateString());
-              
-              return (
-                <motion.div 
-                  key={act.id} 
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="relative overflow-hidden"
-                >
-                  {showDate && actDate && (
-                    <div className="mb-4 flex items-center gap-2">
-                      <span className="bg-gray-100 text-gray-500 text-[10px] font-black px-3 py-1 rounded-full uppercase">
-                        {actDate.toLocaleDateString("ja-JP", { month: "short", day: "numeric", weekday: "short" })}
-                      </span>
-                      <div className="flex-1 h-px bg-gray-50"></div>
-                    </div>
-                  )}
-                  <div className="pl-6 border-l-2 border-gray-50 space-y-4 ml-4">
-                    <div className="relative">
-                      <div className="absolute -left-[33px] top-1 w-4 h-4 rounded-full bg-blue-500 border-4 border-white shadow-sm"></div>
-                      <p className="text-sm font-bold text-gray-800">{formatTime(act.start_time)} 出陣</p>
-                    </div>
-                    <div className="relative">
-                      <div className={`absolute -left-[33px] top-1 w-4 h-4 rounded-full ${act.end_time ? 'bg-samurai-green' : 'bg-gray-200'} border-4 border-white shadow-sm`}></div>
-                      <p className="text-sm font-bold text-gray-800">
-                        {act.end_time ? `${formatTime(act.end_time)} 帰還` : '修行中...'}
-                        {act.voice_score > 0 && <span className="ml-2 text-xs text-samurai-gold font-black">元気 {act.voice_score}</span>}
-                      </p>
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>
-
-          {activities.length > 3 && (
-            <button 
-              onClick={() => setIsHistoryExpanded(!isHistoryExpanded)}
-              className="w-full mt-4 py-3 bg-gray-50 rounded-2xl text-gray-500 text-xs font-bold flex items-center justify-center gap-2 hover:bg-gray-100 transition-colors"
-            >
-              {isHistoryExpanded ? (
-                <>履歴をたたむ <ChevronUp size={14} /></>
-              ) : (
-                <>過去の履歴をすべて見る ({activities.length}件) <ChevronDown size={14} /></>
-              )}
-            </button>
-          )}
-        </div>
-      </section>
-
-      <section className="bg-white p-6 rounded-[40px] shadow-sm border border-gray-100 mb-6">
-        <h2 className="text-gray-500 font-bold mb-4 flex items-center gap-2 text-sm uppercase">
-          <TrendingUp className="text-red-500" size={18} /> 元気の変化（1週間）
-        </h2>
-        <div className="flex items-end justify-between h-32 gap-3 px-2 pt-4">
-          {chartActivities.map((day, i) => (
-            <div key={day.date} className="flex-1 flex flex-col items-center gap-2">
-              <div className="relative w-full flex flex-col justify-end h-24 bg-gray-50/50 rounded-t-lg">
-                <div 
-                  className={`w-full rounded-t-lg transition-all duration-1000 ${i === chartActivities.length - 1 ? 'bg-samurai-green' : 'bg-gray-200'}`}
-                  style={{ height: `${day.score > 0 ? day.score : 5}%` }}
-                ></div>
-              </div>
-              <span className="text-[10px] font-bold text-gray-400">{day.date}</span>
+      {loading ? (
+        <div className="min-h-[200px] flex items-center justify-center font-bold text-gray-400">状況を確認中...</div>
+      ) : (
+        <>
+          <section className="bg-white p-6 rounded-[40px] shadow-sm border border-gray-100 mb-6">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-gray-500 font-bold flex items-center gap-2 text-sm uppercase">
+                <Clock className="text-blue-500" size={18} /> 最近の修行履歴
+              </h2>
             </div>
-          ))}
-        </div>
-      </section>
+            
+            <div className="space-y-10 relative">
+              {activities.length === 0 && <p className="text-gray-300 text-xs text-center py-4">まだ履歴がありません</p>}
+              
+              <AnimatePresence initial={false}>
+                {visibleActivities.map((act, index) => {
+                  const actDate = safeDate(act.start_time);
+                  const prevDate = index > 0 ? safeDate(visibleActivities[index-1].start_time) : null;
+                  const showDate = index === 0 || (actDate && prevDate && actDate.toDateString() !== prevDate.toDateString());
+                  
+                  return (
+                    <motion.div 
+                      key={act.id} 
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="relative overflow-hidden"
+                    >
+                      {showDate && actDate && (
+                        <div className="mb-4 flex items-center gap-2">
+                          <span className="bg-gray-100 text-gray-500 text-[10px] font-black px-3 py-1 rounded-full uppercase">
+                            {actDate.toLocaleDateString("ja-JP", { month: "short", day: "numeric", weekday: "short" })}
+                          </span>
+                          <div className="flex-1 h-px bg-gray-50"></div>
+                        </div>
+                      )}
+                      <div className="pl-6 border-l-2 border-gray-50 space-y-4 ml-4">
+                        <div className="relative">
+                          <div className="absolute -left-[33px] top-1 w-4 h-4 rounded-full bg-blue-500 border-4 border-white shadow-sm"></div>
+                          <p className="text-sm font-bold text-gray-800">{formatTime(act.start_time)} 出陣</p>
+                        </div>
+                        <div className="relative">
+                          <div className={`absolute -left-[33px] top-1 w-4 h-4 rounded-full ${act.end_time ? 'bg-samurai-green' : 'bg-gray-200'} border-4 border-white shadow-sm`}></div>
+                          <p className="text-sm font-bold text-gray-800">
+                            {act.end_time ? `${formatTime(act.end_time)} 帰還` : '修行中...'}
+                            {act.voice_score > 0 && <span className="ml-2 text-xs text-samurai-gold font-black">元気 {act.voice_score}</span>}
+                          </p>
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
 
-      <section className="bg-white p-4 rounded-[40px] shadow-lg mb-6">
-        <h2 className="text-lg font-bold mb-4 px-2 flex items-center gap-2">
-          <MapPin className="text-samurai-gold" size={20} /> 今の足跡
-        </h2>
-        <MapView path={latest?.path || []} alerts={alerts} />
-      </section>
+              {activities.length > 3 && (
+                <button 
+                  onClick={() => setIsHistoryExpanded(!isHistoryExpanded)}
+                  className="w-full mt-4 py-3 bg-gray-50 rounded-2xl text-gray-500 text-xs font-bold flex items-center justify-center gap-2 hover:bg-gray-100 transition-colors"
+                >
+                  {isHistoryExpanded ? (
+                    <>履歴をたたむ <ChevronUp size={14} /></>
+                  ) : (
+                    <>過去の履歴をすべて見る ({activities.length}件) <ChevronDown size={14} /></>
+                  )}
+                </button>
+              )}
+            </div>
+          </section>
+
+          <section className="bg-white p-6 rounded-[40px] shadow-sm border border-gray-100 mb-6">
+            <h2 className="text-gray-500 font-bold mb-4 flex items-center gap-2 text-sm uppercase">
+              <TrendingUp className="text-red-500" size={18} /> 元気の変化（1週間）
+            </h2>
+            <div className="flex items-end justify-between h-32 gap-3 px-2 pt-4">
+              {chartActivities.map((day, i) => (
+                <div key={day.date} className="flex-1 flex flex-col items-center gap-2">
+                  <div className="relative w-full flex flex-col justify-end h-24 bg-gray-50/50 rounded-t-lg">
+                    <div 
+                      className={`w-full rounded-t-lg transition-all duration-1000 ${i === chartActivities.length - 1 ? 'bg-samurai-green' : 'bg-gray-200'}`}
+                      style={{ height: `${day.score > 0 ? day.score : 5}%` }}
+                    ></div>
+                  </div>
+                  <span className="text-[10px] font-bold text-gray-400">{day.date}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="bg-white p-4 rounded-[40px] shadow-lg mb-6">
+            <h2 className="text-lg font-bold mb-4 px-2 flex items-center gap-2">
+              <MapPin className="text-samurai-gold" size={20} /> 今の足跡
+            </h2>
+            <MapView path={latest?.path || []} alerts={alerts} />
+          </section>
+        </>
+      )}
 
       <div className="fixed bottom-6 left-6 right-6">
         <button onClick={() => window.location.href='tel:0000000000'} className="w-full bg-samurai-black text-white py-5 rounded-3xl font-bold shadow-xl active:scale-95 transition-transform">電話をかける</button>
