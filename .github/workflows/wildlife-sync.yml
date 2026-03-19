@@ -1,6 +1,8 @@
 name: Wildlife Alert Sync
 
 on:
+  push:
+    branches: [ main ]
   schedule:
     - cron: '0 * * * *' # 毎時0分に実行
   workflow_dispatch: # 手動実行も可能にする
