@@ -11,25 +11,35 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ping Supabase
+        env:
+          RAW_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          URL="${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}"
-          KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"
-          
-          if [ -z "$URL" ]; then
-            echo "❌ ERROR: NEXT_PUBLIC_SUPABASE_URL is EMPTY"
+          if [ -z "$RAW_URL" ]; then
+            echo "❌ ERROR: NEXT_PUBLIC_SUPABASE_URL is EMPTY in GitHub Secrets"
             exit 1
           fi
+
+          # URLの整形 (https://を補完、末尾の/を削除)
+          URL=$RAW_URL
+          [[ $URL != http* ]] && URL="https://$URL"
+          URL=${URL%/}
           
-          echo "📡 Pinging Supabase..."
+          echo "📡 Pinging Supabase API at: ${URL}"
           
+          # 接続試行
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X GET "${URL}/rest/v1/wildlife_alerts?select=count" \
-          -H "apikey: ${KEY}" \
-          -H "Authorization: Bearer ${KEY}")
+          -H "apikey: ${SUPABASE_KEY}" \
+          -H "Authorization: Bearer ${SUPABASE_KEY}" \
+          --max-time 10)
           
           echo "✅ Response Status: $STATUS"
           
           if [ "$STATUS" -eq 200 ] || [ "$STATUS" -eq 201 ] || [ "$STATUS" -eq 204 ]; then
             echo "Successfully pinged Supabase"
+          elif [ "$STATUS" -eq 000 ]; then
+            echo "❌ Connection Timeout: Database might be PAUSED. Please check Supabase dashboard."
+            exit 1
           else
             echo "Failed to ping Supabase (Status: $STATUS)"
             exit 1
