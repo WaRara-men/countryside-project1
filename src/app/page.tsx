@@ -46,19 +46,21 @@ export default function ElderlyPage() {
 
   // 初期化と認証チェック
   useEffect(() => {
+    // 認証チェック（ブラウザ上でのみ実行）
     if (typeof window === "undefined") return;
-    
+
     const role = localStorage.getItem("samurai_role");
     const savedName = localStorage.getItem("samurai_username");
 
-    if (!role || !savedName) {
+    // 役割と名前の両方が揃っていない限り門へ飛ばす
+    if (!role || !savedName || savedName === "undefined") {
+      localStorage.clear(); // 不完全な情報をリセット
       router.replace("/login");
       return;
     } else if (role === "family") {
       router.replace("/family");
       return;
     }
-    
     setUsername(savedName);
     setIsAuthorized(true);
 

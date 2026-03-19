@@ -105,20 +105,21 @@ export default function FamilyDashboard() {
       setLoading(false);
     }
   };
+useEffect(() => {
+  // 認証チェック（ブラウザ上でのみ実行）
+  if (typeof window === "undefined") return;
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
+  const role = localStorage.getItem("samurai_role");
+  const savedName = localStorage.getItem("samurai_username");
 
-    const role = localStorage.getItem("samurai_role");
-    const savedName = localStorage.getItem("samurai_username");
-    
-    if (!role || !savedName) {
-      router.replace("/login");
-      return;
-    } else if (role === "elderly") {
-      router.replace("/");
-      return;
-    }
+  if (!role || !savedName || savedName === "undefined") {
+    localStorage.clear(); // 不完全な情報をリセット
+    router.replace("/login");
+    return;
+  } else if (role === "elderly") {
+    router.replace("/");
+    return;
+  }
     
     setUsername(savedName);
     setIsAuthorized(true);

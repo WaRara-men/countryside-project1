@@ -10,6 +10,13 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const router = useRouter();
 
+  // この画面に来たら古い情報を一掃する（強制リセット）
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.clear();
+    }
+  }, []);
+
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     const word = aicotoba.trim();
