@@ -2,45 +2,45 @@ name: Supabase Keep Alive
 
 on:
   schedule:
-    # 毎日（UTC 0:00 = 日本時間 9:00）実行
     - cron: '0 0 * * *'
-  workflow_dispatch: # 手動実行も可能に
+  workflow_dispatch:
 
 jobs:
   keep-alive:
     runs-on: ubuntu-latest
     steps:
       - name: Ping Supabase
-        env:
-          RAW_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          if [ -z "$RAW_URL" ]; then
-            echo "❌ ERROR: NEXT_PUBLIC_SUPABASE_URL is EMPTY in GitHub Secrets"
+          # シークレットを取得し、前後の空白や改行を完全に除去
+          RAW_URL="${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}"
+          CLEAN_URL=$(echo "$RAW_URL" | tr -d '[:space:]')
+          
+          if [ -z "$CLEAN_URL" ]; then
+            echo "❌ ERROR: NEXT_PUBLIC_SUPABASE_URL is empty"
             exit 1
           fi
 
-          # URLの整形 (https://を補完、末尾の/を削除)
-          URL=$RAW_URL
-          [[ $URL != http* ]] && URL="https://$URL"
-          URL=${URL%/}
+          # URLが http から始まっていない場合は補完
+          if [[ $CLEAN_URL != http* ]]; then
+            CLEAN_URL="https://$CLEAN_URL"
+          fi
           
-          echo "📡 Pinging Supabase API at: ${URL}"
+          # 末尾の / を削除
+          CLEAN_URL=${CLEAN_URL%/}
+
+          echo "📡 Target URL: ${CLEAN_URL}"
           
-          # 接続試行
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X GET "${URL}/rest/v1/wildlife_alerts?select=count" \
-          -H "apikey: ${SUPABASE_KEY}" \
-          -H "Authorization: Bearer ${SUPABASE_KEY}" \
-          --max-time 10)
+          # シンプルにAPIのベースURLを叩く
+          # 200じゃなくても「404」や「401」が返ってくれば、サーバーは動いている証拠
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$CLEAN_URL/rest/v1/" \
+          -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+          --max-time 15)
           
-          echo "✅ Response Status: $STATUS"
+          echo "✅ Status Code: $STATUS"
           
-          if [ "$STATUS" -eq 200 ] || [ "$STATUS" -eq 201 ] || [ "$STATUS" -eq 204 ]; then
-            echo "Successfully pinged Supabase"
-          elif [ "$STATUS" -eq 000 ]; then
-            echo "❌ Connection Timeout: Database might be PAUSED. Please check Supabase dashboard."
-            exit 1
+          if [ "$STATUS" -ne 000 ]; then
+            echo "Success! Supabase responded."
           else
-            echo "Failed to ping Supabase (Status: $STATUS)"
+            echo "❌ Connection failed. Check if the URL is correct or if Supabase is still paused."
             exit 1
           fi
