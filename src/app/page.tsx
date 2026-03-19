@@ -16,6 +16,7 @@ import { getLatestWildlifeAlerts, WildlifeAlert } from "@/lib/wildlife";
 export default function ElderlyPage() {
   const router = useRouter();
   const [isAuthorized, setIsAuthorized] = useState(false);
+  const [username, setUsername] = useState<string>("");
   const [status, setStatus] = useState<"resting" | "walking" | "recording" | "praised">("resting");
   const [isStarting, setIsStarting] = useState(false);
   const [currentActivityId, setCurrentActivityId] = useState<string | null>(null);
@@ -49,13 +50,17 @@ export default function ElderlyPage() {
     if (typeof window === "undefined") return;
     
     const role = localStorage.getItem("samurai_role");
-    if (!role) {
+    const savedName = localStorage.getItem("samurai_username");
+
+    if (!role || !savedName) {
       router.replace("/login");
       return;
     } else if (role === "family") {
       router.replace("/family");
       return;
     }
+    
+    setUsername(savedName);
     setIsAuthorized(true);
 
     const savedStatus = localStorage.getItem("samurai_status");
@@ -69,12 +74,10 @@ export default function ElderlyPage() {
 
     const fetchData = async () => {
       try {
-        const username = localStorage.getItem("samurai_username") || "不明な侍";
-
         const [msgData, count, rankInfo, alertData] = await Promise.all([
           getLatestMessages().catch(() => []),
           getActiveSamuraiCount().catch(() => 0),
-          getUserSamuraiRank(username).catch(() => ({ rank: "門下生", totalSteps: 0, nextRankSteps: 5000 })),
+          getUserSamuraiRank(savedName).catch(() => ({ rank: "門下生", totalSteps: 0, nextRankSteps: 5000 })),
           getLatestWildlifeAlerts().catch(() => [])
         ]);
         setMessages(msgData);
@@ -86,11 +89,12 @@ export default function ElderlyPage() {
       }
     };
     fetchData();
-  }, []);
+  }, [router, startTracking]);
 
   if (!isAuthorized) return null; // 認証されるまで何も表示しない
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
     localStorage.setItem("samurai_status", status);
     if (currentActivityId) {
       localStorage.setItem("samurai_activity_id", currentActivityId);
@@ -119,9 +123,46 @@ export default function ElderlyPage() {
     setIsStarting(true);
     
     try {
-      const username = localStorage.getItem("samurai_username") || "不明な侍";
-
       // 1. まず現在地を1点取得する（家族画面での「取得中」防止）
+      let initialPath: {lat: number, lng: number}[] = [];
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true });
+      }).catch(() => null);
+
+      if (position) {
+        initialPath = [{ lat: position.coords.latitude, lng: position.coords.longitude }];
+      }
+
+      const { data, error } = await supabase
+        .from("activities")
+        .insert([{ 
+          start_time: new Date().toISOString(),
+          path: initialPath,
+          distance: 0,
+          username: username
+        }])
+        .select()
+        .single();
+
+      if (error) throw new Error(error.message);
+
+      if (data) {
+        setCurrentActivityId(data.id);
+        setStatus("walking");
+        startTracking(); // 追跡開始
+        if (initialPath.length > 0) {
+          // useTracking内のpathも初期化（家族画面での「取得中」防止）
+          setPath(initialPath);
+        }
+        messages.forEach(msg => markAsRead(msg.id).catch(() => {}));
+        setMessages([]);
+      }
+    } catch (err: any) {
+      alert(`出陣の準備に失敗しました。\n理由: ${err.message}`);
+    } finally {
+      setIsStarting(false);
+    }
+  };
       let initialPath: {lat: number, lng: number}[] = [];
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true });

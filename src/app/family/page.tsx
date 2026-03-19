@@ -27,6 +27,7 @@ interface ChartData {
 export default function FamilyDashboard() {
   const router = useRouter();
   const [isAuthorized, setIsAuthorized] = useState(false);
+  const [username, setUsername] = useState<string>("");
   const [activities, setActivities] = useState<ActivityData[]>([]);
   const [chartActivities, setChartActivities] = useState<ChartData[]>([]);
   const [alerts, setAlerts] = useState<WildlifeAlert[]>([]);
@@ -45,14 +46,13 @@ export default function FamilyDashboard() {
     return isNaN(d.getTime()) ? null : d;
   };
 
-  const fetchActivities = async () => {
+  const fetchActivities = async (uname: string) => {
     try {
-      const username = localStorage.getItem("samurai_username") || "不明な侍";
       const [activityRes, alertRes] = await Promise.all([
         supabase
           .from("activities")
           .select("*")
-          .eq("username", username) // 特定のユーザーで絞り込み
+          .eq("username", uname) // 特定のユーザーで絞り込み
           .order("start_time", { ascending: false })
           .limit(100),
         getLatestWildlifeAlerts()
@@ -112,28 +112,31 @@ export default function FamilyDashboard() {
     if (typeof window === "undefined") return;
 
     const role = localStorage.getItem("samurai_role");
-    const username = localStorage.getItem("samurai_username");
-    if (!role || !username) {
+    const savedName = localStorage.getItem("samurai_username");
+    
+    if (!role || !savedName) {
       router.replace("/login");
       return;
     } else if (role === "elderly") {
       router.replace("/");
       return;
     }
+    
+    setUsername(savedName);
     setIsAuthorized(true);
 
-    fetchActivities();
+    fetchActivities(savedName);
     const channel = supabase
       .channel("family-realtime")
       .on("postgres_changes", { 
         event: "*", 
         schema: "public", 
         table: "activities",
-        filter: `username=eq.${username}` // リアルタイム更新も特定のユーザーのみに制限
-      }, () => fetchActivities())
+        filter: `username=eq.${savedName}` 
+      }, () => fetchActivities(savedName))
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, [router]);
 
   if (!isAuthorized) return null; // 認証されるまで何も表示しない
 
@@ -169,8 +172,6 @@ export default function FamilyDashboard() {
     if (!d) return "--:--";
     return d.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", hour12: false });
   };
-
-  const username = typeof window !== 'undefined' ? localStorage.getItem("samurai_username") : "父さん";
 
   return (
     <main className="min-h-screen bg-gray-50 p-4 pb-24 font-sans max-w-lg mx-auto">
