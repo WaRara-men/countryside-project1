@@ -12,17 +12,25 @@ export default function LoginPage() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    const word = aicotoba.trim().toLowerCase();
+    const word = aicotoba.trim();
+    if (!word) return;
 
-    if (word === "さむらい" || word === "侍" || word === "samurai") {
-      localStorage.setItem("samurai_role", "elderly");
-      localStorage.setItem("samurai_username", "安中侍");
-      router.push("/");
-    } else if (word === "かぞく" || word === "家族" || word === "family") {
+    // 「さま」「様」「sama」で終わる場合は家族モード
+    const isFamily = word.endsWith("さま") || word.endsWith("様") || word.toLowerCase().endsWith("sama");
+    
+    // ユーザーID（合言葉から末尾の識別子を除いたもの）
+    const userId = isFamily 
+      ? word.replace(/(さま|様|sama)$/i, "") 
+      : word;
+
+    if (isFamily) {
       localStorage.setItem("samurai_role", "family");
+      localStorage.setItem("samurai_username", userId);
       router.push("/family");
     } else {
-      setError("合言葉が違い申す。もう一度お試しあれ。");
+      localStorage.setItem("samurai_role", "elderly");
+      localStorage.setItem("samurai_username", userId);
+      router.push("/");
     }
   };
 
@@ -38,7 +46,7 @@ export default function LoginPage() {
             <Shield size={48} className="text-samurai-gold" />
           </div>
           <h1 className="text-3xl font-black text-samurai-gold font-samurai mb-2">安中・侍の足跡</h1>
-          <p className="text-sm font-bold text-gray-400">入城の合言葉を申せ</p>
+          <p className="text-sm font-bold text-gray-400">一族の合言葉を申せ</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-6">
@@ -50,7 +58,7 @@ export default function LoginPage() {
                 setAicotoba(e.target.value);
                 setError("");
               }}
-              placeholder="ここに入力..."
+              placeholder="例：あんなか太郎"
               className="w-full bg-black/50 border-2 border-gray-600 rounded-3xl px-6 py-5 text-2xl font-black text-center text-white placeholder:text-gray-600 focus:outline-none focus:border-samurai-gold transition-colors"
               autoComplete="off"
               autoFocus
@@ -78,10 +86,19 @@ export default function LoginPage() {
         </form>
 
         <div className="mt-8 pt-6 border-t border-white/10 text-center">
-          <p className="text-xs text-gray-500 mb-2">※体験用のお試し合言葉</p>
-          <div className="flex justify-center gap-4 text-sm font-bold">
-            <span className="bg-gray-800 px-3 py-1 rounded-lg">さむらい</span>
-            <span className="bg-gray-800 px-3 py-1 rounded-lg">かぞく</span>
+          <p className="text-[10px] text-gray-500 mb-4 leading-relaxed">
+            ※家族で決めた好きな言葉を入れてください。<br/>
+            末尾に「さま」をつけると家族用画面になります。
+          </p>
+          <div className="space-y-2">
+            <div className="flex flex-col items-center gap-1">
+              <span className="text-[10px] text-gray-400 uppercase tracking-widest">本人（例）</span>
+              <span className="bg-gray-800 px-4 py-1 rounded-full text-xs font-bold text-samurai-gold border border-samurai-gold/20">あんなか太郎</span>
+            </div>
+            <div className="flex flex-col items-center gap-1 mt-2">
+              <span className="text-[10px] text-gray-400 uppercase tracking-widest">家族（例）</span>
+              <span className="bg-gray-800 px-4 py-1 rounded-full text-xs font-bold text-samurai-white border border-white/10">あんなか太郎さま</span>
+            </div>
           </div>
         </div>
       </motion.div>

@@ -65,8 +65,7 @@ export default function ElderlyPage() {
 
     const fetchData = async () => {
       try {
-        const params = new URLSearchParams(window.location.search);
-        const username = params.get("user") || "不明な侍";
+        const username = localStorage.getItem("samurai_username") || "不明な侍";
 
         const [msgData, count, rankInfo, alertData] = await Promise.all([
           getLatestMessages().catch(() => []),
@@ -114,8 +113,7 @@ export default function ElderlyPage() {
     setIsStarting(true);
     
     try {
-      const params = new URLSearchParams(window.location.search);
-      const username = params.get("user") || "不明な侍";
+      const username = localStorage.getItem("samurai_username") || "不明な侍";
 
       // 1. まず現在地を1点取得する（家族画面での「取得中」防止）
       let initialPath: {lat: number, lng: number}[] = [];

@@ -46,10 +46,12 @@ export default function FamilyDashboard() {
 
   const fetchActivities = async () => {
     try {
+      const username = localStorage.getItem("samurai_username") || "不明な侍";
       const [activityRes, alertRes] = await Promise.all([
         supabase
           .from("activities")
           .select("*")
+          .eq("username", username) // 特定のユーザーで絞り込み
           .order("start_time", { ascending: false })
           .limit(100),
         getLatestWildlifeAlerts()
@@ -107,7 +109,8 @@ export default function FamilyDashboard() {
   useEffect(() => {
     // 認証チェック
     const role = localStorage.getItem("samurai_role");
-    if (!role) {
+    const username = localStorage.getItem("samurai_username");
+    if (!role || !username) {
       router.push("/login");
       return;
     } else if (role === "elderly") {
@@ -118,7 +121,12 @@ export default function FamilyDashboard() {
     fetchActivities();
     const channel = supabase
       .channel("family-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "activities" }, () => fetchActivities())
+      .on("postgres_changes", { 
+        event: "*", 
+        schema: "public", 
+        table: "activities",
+        filter: `username=eq.${username}` // リアルタイム更新も特定のユーザーのみに制限
+      }, () => fetchActivities())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
@@ -156,12 +164,14 @@ export default function FamilyDashboard() {
     return d.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", hour12: false });
   };
 
+  const username = typeof window !== 'undefined' ? localStorage.getItem("samurai_username") : "父さん";
+
   return (
     <main className="min-h-screen bg-gray-50 p-4 pb-24 font-sans max-w-lg mx-auto">
       <header className="mb-6 bg-white p-6 rounded-[40px] shadow-sm border border-gray-100">
         <div className="flex justify-between items-start mb-4">
           <div>
-            <h1 className="text-xl font-bold text-gray-800">父さんの安否</h1>
+            <h1 className="text-xl font-bold text-gray-800">{username}の安否</h1>
             <p className="text-sm text-gray-600 font-bold mt-1">{address}</p>
             {latest?.path && Array.isArray(latest.path) && latest.path.length > 0 && (
               <p className="text-[10px] text-samurai-gold font-black uppercase tracking-widest mt-0.5">
