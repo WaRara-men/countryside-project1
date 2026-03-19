@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { ShieldAlert, Footprints, Home, Mic, Award, WifiOff, Wifi, AlertTriangle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -34,7 +34,6 @@ export default function ElderlyPage() {
   const progress = useMemo(() => calculateNakasendoProgress(currentDistance), [currentDistance]);
   const currentSteps = useMemo(() => Math.floor(currentDistance * 1500), [currentDistance]);
 
-  // 接近検知（現在地がアラートの半径 + 200m以内に入ったら警告）
   const isNearDanger = useMemo(() => {
     if (path.length === 0 || alerts.length === 0) return false;
     const currentLoc = path[path.length - 1];
@@ -45,8 +44,8 @@ export default function ElderlyPage() {
     });
   }, [path, alerts]);
 
+  // 初期化と認証チェック
   useEffect(() => {
-    // 認証チェック（ブラウザ上でのみ実行）
     if (typeof window === "undefined") return;
     
     const role = localStorage.getItem("samurai_role");
@@ -63,7 +62,7 @@ export default function ElderlyPage() {
     setUsername(savedName);
     setIsAuthorized(true);
 
-    const savedStatus = localStorage.getItem("samurai_status");
+    const savedStatus = localStorage.getItem("samurai_status") as any;
     const savedId = localStorage.getItem("samurai_activity_id");
     
     if (savedStatus === "walking" && savedId) {
@@ -85,32 +84,32 @@ export default function ElderlyPage() {
         setUserRank(rankInfo);
         setAlerts(alertData);
       } catch (err) {
-        console.error("データ取得失敗:", err);
+        console.error("Data fetch error:", err);
       }
     };
     fetchData();
   }, [router, startTracking]);
 
-  if (!isAuthorized) return null; // 認証されるまで何も表示しない
-
+  // 状態の永続化
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (!isAuthorized) return;
     localStorage.setItem("samurai_status", status);
     if (currentActivityId) {
       localStorage.setItem("samurai_activity_id", currentActivityId);
     } else {
       localStorage.removeItem("samurai_activity_id");
     }
-  }, [status, currentActivityId]);
+  }, [status, currentActivityId, isAuthorized]);
 
+  // 同期ロジック
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (!isAuthorized) return;
     setIsOnline(navigator.onLine);
     return setupSyncListener(() => {
       setIsOnline(true);
       if (currentActivityId) syncPathToSupabase(currentActivityId, path);
     });
-  }, [currentActivityId, path]);
+  }, [currentActivityId, path, isAuthorized]);
 
   useEffect(() => {
     if (status === "walking" && currentActivityId && path.length > 0) {
@@ -121,9 +120,7 @@ export default function ElderlyPage() {
   const handleStart = async () => {
     if (isStarting) return;
     setIsStarting(true);
-    
     try {
-      // 1. まず現在地を1点取得する（家族画面での「取得中」防止）
       let initialPath: {lat: number, lng: number}[] = [];
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true });
@@ -149,16 +146,13 @@ export default function ElderlyPage() {
       if (data) {
         setCurrentActivityId(data.id);
         setStatus("walking");
-        startTracking(); // 追跡開始
-        if (initialPath.length > 0) {
-          // useTracking内のpathも初期化（家族画面での「取得中」防止）
-          setPath(initialPath);
-        }
+        startTracking();
+        if (initialPath.length > 0) setPath(initialPath);
         messages.forEach(msg => markAsRead(msg.id).catch(() => {}));
         setMessages([]);
       }
     } catch (err: any) {
-      alert(`出陣の準備に失敗しました。\n理由: ${err.message}`);
+      alert(`出陣失敗: ${err.message}`);
     } finally {
       setIsStarting(false);
     }
@@ -180,7 +174,7 @@ export default function ElderlyPage() {
             end_time: new Date().toISOString(),
             path: finalPath,
             voice_score: score,
-            distance: calculateTotalPathDistance(finalPath), // 正確な距離を保存
+            distance: calculateTotalPathDistance(finalPath),
             is_warning: score < 70,
           })
           .eq("id", currentActivityId);
@@ -191,6 +185,8 @@ export default function ElderlyPage() {
       localStorage.removeItem("samurai_status");
     }, 5000);
   };
+
+  if (!isAuthorized) return null;
 
   return (
     <main className="min-h-screen bg-samurai-black text-samurai-white p-6 flex flex-col items-center justify-between font-sans">
@@ -218,8 +214,7 @@ export default function ElderlyPage() {
       <div className="flex-1 flex flex-col items-center justify-center gap-8 w-full">
         <AnimatePresence mode="wait">
           {status === "resting" && (
-            <motion.div key="resting" className="text-center w-full px-4 space-y-6">
-              {/* 1. 侍の称号（累計実績） */}
+            <motion.div key="resting" className="text-center w-full px-4 space-y-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
               <div className="bg-samurai-gold/10 border-2 border-samurai-gold/30 p-4 rounded-[32px]">
                 <p className="text-xs text-samurai-gold font-bold uppercase tracking-tighter mb-1">現在の階級</p>
                 <h2 className="text-3xl font-black text-samurai-gold font-samurai">{userRank.rank}</h2>
@@ -232,7 +227,6 @@ export default function ElderlyPage() {
                 <p className="text-[10px] text-gray-400 mt-1">累計 {userRank.totalSteps.toLocaleString()} 歩</p>
               </div>
 
-              {/* 2. メッセージ */}
               {messages.length > 0 && (
                 <div className="bg-samurai-gold text-samurai-black p-5 rounded-[32px] rounded-bl-none shadow-xl relative text-left">
                   <p className="text-sm font-black italic">「{messages[0].content}」</p>
@@ -240,7 +234,6 @@ export default function ElderlyPage() {
                 </div>
               )}
 
-              {/* 3. 本日の目標選択 */}
               <div className="space-y-3">
                 <p className="text-elderly-base font-bold text-gray-400">本日の修行目標</p>
                 <div className="grid grid-cols-3 gap-3">
@@ -269,7 +262,7 @@ export default function ElderlyPage() {
           )}
 
           {status === "walking" && (
-            <motion.div key="walking" className="text-center w-full">
+            <motion.div key="walking" className="text-center w-full" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
               {isNearDanger && (
                 <motion.div 
                   initial={{ opacity: 0, y: -20 }}
@@ -324,18 +317,18 @@ export default function ElderlyPage() {
           )}
 
           {status === "recording" && (
-            <div className="text-center">
+            <motion.div className="text-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
               <Mic className="w-40 h-40 text-samurai-red animate-pulse mx-auto" />
               <p className="text-elderly-lg font-bold mt-4">「ただいま」とお話しください</p>
-            </div>
+            </motion.div>
           )}
 
           {status === "praised" && (
-            <div className="text-center">
+            <motion.div className="text-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
               <Award className="w-48 h-48 text-samurai-gold mx-auto mb-6" />
               <h2 className="text-elderly-xl font-black text-samurai-gold font-samurai">実に見事なり！</h2>
               <button onClick={() => setStatus("resting")} className="mt-12 bg-samurai-white text-samurai-black px-12 py-4 rounded-full text-elderly-base font-bold shadow-xl">家で休む</button>
-            </div>
+            </motion.div>
           )}
         </AnimatePresence>
       </div>
@@ -343,7 +336,7 @@ export default function ElderlyPage() {
       {status !== "praised" && status !== "recording" && (
         <div className="w-full pb-8">
           {status === "resting" ? (
-            <button onClick={handleStart} className="w-full bg-samurai-gold text-samurai-black py-10 rounded-3xl shadow-2xl active:scale-95 transition-transform">
+            <button onClick={handleStart} className="w-full bg-samurai-gold text-samurai-black py-10 rounded-3xl shadow-2xl active:scale-95 transition-transform disabled:opacity-50" disabled={isStarting}>
               <span className="text-elderly-xl font-black font-samurai">いざ、出陣！</span>
             </button>
           ) : (
