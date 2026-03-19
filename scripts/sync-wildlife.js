@@ -1,6 +1,6 @@
 // GitHub Actionsで自動実行される動物出没情報同期スクリプト
 require('dotenv').config();
-const { GoogleGenerativeAI } = require("@google-generative-ai/generative-ai");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { createClient } = require('@supabase/supabase-js');
 const puppeteer = require('puppeteer-core');
 
