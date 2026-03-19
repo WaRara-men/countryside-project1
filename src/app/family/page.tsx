@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { MapPin, Calendar, Clock, TrendingUp, ChevronDown, ChevronUp } from "lucide-react";
 import MapView from "@/components/MapView";
 import { motion, AnimatePresence } from "framer-motion";
@@ -24,6 +25,7 @@ interface ChartData {
 }
 
 export default function FamilyDashboard() {
+  const router = useRouter();
   const [activities, setActivities] = useState<ActivityData[]>([]);
   const [chartActivities, setChartActivities] = useState<ChartData[]>([]);
   const [alerts, setAlerts] = useState<WildlifeAlert[]>([]);
@@ -103,6 +105,16 @@ export default function FamilyDashboard() {
   };
 
   useEffect(() => {
+    // 認証チェック
+    const role = localStorage.getItem("samurai_role");
+    if (!role) {
+      router.push("/login");
+      return;
+    } else if (role === "elderly") {
+      router.push("/");
+      return;
+    }
+
     fetchActivities();
     const channel = supabase
       .channel("family-realtime")

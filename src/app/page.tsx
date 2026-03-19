@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { ShieldAlert, Footprints, Home, Mic, Award, WifiOff, Wifi, AlertTriangle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTracking } from "@/hooks/useTracking";
@@ -13,6 +14,7 @@ import { calculateTotalPathDistance, calculateNakasendoProgress, calculateDistan
 import { getLatestWildlifeAlerts, WildlifeAlert } from "@/lib/wildlife";
 
 export default function ElderlyPage() {
+  const router = useRouter();
   const [status, setStatus] = useState<"resting" | "walking" | "recording" | "praised">("resting");
   const [isStarting, setIsStarting] = useState(false);
   const [currentActivityId, setCurrentActivityId] = useState<string | null>(null);
@@ -42,6 +44,16 @@ export default function ElderlyPage() {
   }, [path, alerts]);
 
   useEffect(() => {
+    // 認証チェック
+    const role = localStorage.getItem("samurai_role");
+    if (!role) {
+      router.push("/login");
+      return;
+    } else if (role === "family") {
+      router.push("/family");
+      return;
+    }
+
     const savedStatus = localStorage.getItem("samurai_status");
     const savedId = localStorage.getItem("samurai_activity_id");
     
