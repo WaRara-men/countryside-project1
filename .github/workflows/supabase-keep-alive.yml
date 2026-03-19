@@ -11,20 +11,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ping Supabase
-        env:
-          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          if [ -z "$SUPABASE_URL" ]; then
-            echo "Error: NEXT_PUBLIC_SUPABASE_URL is not set in GitHub Secrets"
+          URL="${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}"
+          KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"
+          
+          if [ -z "$URL" ]; then
+            echo "❌ ERROR: NEXT_PUBLIC_SUPABASE_URL is EMPTY"
             exit 1
           fi
           
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X GET "${SUPABASE_URL}/rest/v1/wildlife_alerts?select=count" \
-          -H "apikey: ${SUPABASE_KEY}" \
-          -H "Authorization: Bearer ${SUPABASE_KEY}")
+          echo "📡 Pinging Supabase..."
           
-          echo "Supabase Response Status: $STATUS"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X GET "${URL}/rest/v1/wildlife_alerts?select=count" \
+          -H "apikey: ${KEY}" \
+          -H "Authorization: Bearer ${KEY}")
+          
+          echo "✅ Response Status: $STATUS"
           
           if [ "$STATUS" -eq 200 ] || [ "$STATUS" -eq 201 ] || [ "$STATUS" -eq 204 ]; then
             echo "Successfully pinged Supabase"
