@@ -163,45 +163,6 @@ export default function ElderlyPage() {
       setIsStarting(false);
     }
   };
-      let initialPath: {lat: number, lng: number}[] = [];
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true });
-      }).catch(() => null);
-
-      if (position) {
-        initialPath = [{ lat: position.coords.latitude, lng: position.coords.longitude }];
-      }
-
-      const { data, error } = await supabase
-        .from("activities")
-        .insert([{ 
-          start_time: new Date().toISOString(),
-          path: initialPath,
-          distance: 0,
-          username: username
-        }])
-        .select()
-        .single();
-
-      if (error) throw new Error(error.message);
-
-      if (data) {
-        setCurrentActivityId(data.id);
-        setStatus("walking");
-        startTracking(); // 追跡開始
-        if (initialPath.length > 0) {
-          // useTracking内のpathも初期化（家族画面での「取得中」防止）
-          setPath(initialPath);
-        }
-        messages.forEach(msg => markAsRead(msg.id).catch(() => {}));
-        setMessages([]);
-      }
-    } catch (err: any) {
-      alert(`出陣の準備に失敗しました。\n理由: ${err.message}`);
-    } finally {
-      setIsStarting(false);
-    }
-  };
 
   const handleEnd = async () => {
     const finalPath = stopTracking();
