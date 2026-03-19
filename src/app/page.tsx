@@ -45,7 +45,9 @@ export default function ElderlyPage() {
   }, [path, alerts]);
 
   useEffect(() => {
-    // 認証チェック
+    // 認証チェック（ブラウザ上でのみ実行）
+    if (typeof window === "undefined") return;
+    
     const role = localStorage.getItem("samurai_role");
     if (!role) {
       router.replace("/login");

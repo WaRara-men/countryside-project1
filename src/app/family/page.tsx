@@ -108,7 +108,9 @@ export default function FamilyDashboard() {
   };
 
   useEffect(() => {
-    // 認証チェック
+    // 認証チェック（ブラウザ上でのみ実行）
+    if (typeof window === "undefined") return;
+
     const role = localStorage.getItem("samurai_role");
     const username = localStorage.getItem("samurai_username");
     if (!role || !username) {
