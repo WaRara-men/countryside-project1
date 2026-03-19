@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { MapPin, Calendar, Clock, TrendingUp, ChevronDown, ChevronUp } from "lucide-react";
+import { MapPin, Calendar, Clock, TrendingUp, ChevronDown, ChevronUp, Home } from "lucide-react";
 import MapView from "@/components/MapView";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/lib/supabase";
@@ -105,21 +105,21 @@ export default function FamilyDashboard() {
       setLoading(false);
     }
   };
-useEffect(() => {
-  // 認証チェック（ブラウザ上でのみ実行）
-  if (typeof window === "undefined") return;
 
-  const role = localStorage.getItem("samurai_role");
-  const savedName = localStorage.getItem("samurai_username");
+  useEffect(() => {
+    if (typeof window === "undefined") return;
 
-  if (!role || !savedName || savedName === "undefined") {
-    localStorage.clear(); // 不完全な情報をリセット
-    router.replace("/login");
-    return;
-  } else if (role === "elderly") {
-    router.replace("/");
-    return;
-  }
+    const role = localStorage.getItem("samurai_role");
+    const savedName = localStorage.getItem("samurai_username");
+    
+    if (!role || !savedName || savedName === "undefined") {
+      localStorage.clear();
+      router.replace("/login");
+      return;
+    } else if (role === "elderly") {
+      router.replace("/");
+      return;
+    }
     
     setUsername(savedName);
     setIsAuthorized(true);
@@ -167,13 +167,20 @@ useEffect(() => {
     return d.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", hour12: false });
   };
 
+  const handleLogout = () => {
+    if (typeof window !== "undefined") {
+      localStorage.clear();
+      router.replace("/login");
+    }
+  };
+
   if (!isAuthorized) return null;
 
   return (
     <main className="min-h-screen bg-gray-50 p-4 pb-24 font-sans max-w-lg mx-auto">
       <header className="mb-6 bg-white p-6 rounded-[40px] shadow-sm border border-gray-100">
         <div className="flex justify-between items-start mb-4">
-          <div>
+          <div className="flex-1">
             <h1 className="text-xl font-bold text-gray-800">{username}の安否</h1>
             <p className="text-sm text-gray-600 font-bold mt-1">{address}</p>
             {latest?.path && Array.isArray(latest.path) && latest.path.length > 0 && (
@@ -182,6 +189,16 @@ useEffect(() => {
               </p>
             )}
           </div>
+          <button 
+            onClick={handleLogout}
+            className="ml-4 p-2 bg-gray-50 text-gray-400 rounded-full hover:bg-gray-100 transition-colors"
+            title="門へ戻る"
+          >
+            <Home size={20} />
+          </button>
+        </div>
+
+        <div className="flex items-center gap-6 mb-4">
           <div className={`${latest?.end_time ? 'bg-samurai-green/10 text-samurai-green' : 'bg-samurai-gold/10 text-samurai-gold'} px-4 py-2 rounded-full text-sm font-black animate-pulse`}>
             {latest?.end_time ? '帰宅済み' : '修行中'}
           </div>
@@ -206,7 +223,9 @@ useEffect(() => {
       </header>
 
       {loading ? (
-        <div className="min-h-[200px] flex items-center justify-center font-bold text-gray-400">状況を確認中...</div>
+        <div className="min-h-[200px] flex items-center justify-center font-bold text-gray-400 text-sm uppercase tracking-widest animate-pulse">
+          状況を確認中...
+        </div>
       ) : (
         <>
           <section className="bg-white p-6 rounded-[40px] shadow-sm border border-gray-100 mb-6">
@@ -294,7 +313,7 @@ useEffect(() => {
           </section>
 
           <section className="bg-white p-4 rounded-[40px] shadow-lg mb-6">
-            <h2 className="text-lg font-bold mb-4 px-2 flex items-center gap-2">
+            <h2 className="text-lg font-bold mb-4 px-2 flex items-center gap-2 text-gray-800">
               <MapPin className="text-samurai-gold" size={20} /> 今の足跡
             </h2>
             <MapView path={latest?.path || []} alerts={alerts} />
